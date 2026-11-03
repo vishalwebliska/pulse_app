@@ -9,6 +9,9 @@ class MePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authControllerProvider);
+    final cs = Theme.of(context).colorScheme;
+    final ws = auth.currentWorkspace;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Me')),
       body: Center(
@@ -18,10 +21,20 @@ class MePage extends ConsumerWidget {
             const CircleAvatar(radius: 32, child: Icon(Icons.person, size: 32)),
             const SizedBox(height: 12),
             Text(
-              auth.tenantId == null
-                  ? 'No workspace selected'
-                  : 'Workspace: ${auth.tenantId}',
+              ws != null
+                  ? ws.name
+                  : (auth.tenantId == null
+                      ? 'No workspace selected'
+                      : 'Workspace'),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             ),
+            if (auth.workspaces.length > 1) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${auth.workspaces.length} workspaces · switch from the Chat tab',
+                style: TextStyle(color: cs.outline, fontSize: 12),
+              ),
+            ],
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: () =>

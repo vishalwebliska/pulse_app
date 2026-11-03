@@ -1,22 +1,25 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/auth_controller.dart';
 import '../people/people_search_screen.dart';
 import 'channel_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'new_group_screen.dart';
 
-/// The Chat tab: the workspace's channels + direct messages. A search button
-/// finds people (and starts a DM); a group button creates a new group.
-class ChatPage extends StatefulWidget {
+/// The Chat tab: the workspace's channels + direct messages. The app-bar title
+/// is a workspace switcher; a search button finds people (and starts a DM); a
+/// group button creates a new group.
+class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({super.key});
 
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  ConsumerState<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends ConsumerState<ChatPage> {
   List<PulseChannel>? _channels;
   List<PulseChannel>? _dms;
   bool _loading = true;
@@ -83,9 +86,15 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Reload conversations whenever the active workspace changes.
+    ref.listen<AuthState>(authControllerProvider, (prev, next) {
+      if (prev != null && prev.tenantId != next.tenantId) _load();
+    });
+    final auth = ref.watch(authControllerProvider);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pulse'),
+        title: _buildTitle(auth),
         actions: [
           IconButton(
             tooltip: 'Find people',
@@ -105,6 +114,41 @@ class _ChatPageState extends State<ChatPage> {
         ],
       ),
       body: RefreshIndicator(onRefresh: _load, child: _buildBody()),
+    );
+  }
+
+  /// App-bar title: a tap-to-switch workspace dropdown (plain text if there's
+  /// only one workspace, or none loaded yet).
+  Widget _buildTitle(AuthState auth) {
+    final current = auth.currentWorkspace;
+    final label = current?.name ?? 'Pulse';
+    if (auth.workspaces.length <= 1) {
+      return Text(label, overflow: TextOverflow.ellipsis);
+    }
+    return PopupMenuButton<String>(
+      tooltip: 'Switch workspace',
+      onSelected: (id) =>
+          ref.read(authControllerProvider.notifier).switchWorkspace(id),
+      itemBuilder: (_) => [
+        for (final w in auth.workspaces)
+          PopupMenuItem<String>(
+            value: w.id,
+            child: Row(
+              children: [
+                Icon(w.id == auth.tenantId ? Icons.check : null, size: 18),
+                const SizedBox(width: 8),
+                Flexible(child: Text(w.name)),
+              ],
+            ),
+          ),
+      ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.arrow_drop_down),
+        ],
+      ),
     );
   }
 
