@@ -8,6 +8,7 @@ import '../../core/realtime.dart';
 import '../../core/token_store.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'thread_screen.dart';
 
 /// A single conversation: message history + composer. Works for both regular
 /// channels and DMs (set [isDm]). Live messages arrive over Reverb; sends also
@@ -195,6 +196,14 @@ class _ChannelScreenState extends State<ChannelScreen> {
               ),
             ),
             const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.forum_outlined),
+              title: const Text('Reply in thread'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _openThread(m);
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.copy),
               title: const Text('Copy text'),
@@ -423,10 +432,51 @@ class _ChannelScreenState extends State<ChannelScreen> {
             const SizedBox(height: 2),
             _body(m.body),
             _reactionChips(m),
+            _replyCountRow(m),
           ],
         ),
       ),
     );
+  }
+
+  Widget _replyCountRow(PulseMessage m) {
+    if (m.replyCount <= 0) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: InkWell(
+        onTap: () => _openThread(m),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.forum_outlined, size: 15, color: cs.primary),
+              const SizedBox(width: 4),
+              Text(
+                m.replyCount == 1 ? '1 reply' : '${m.replyCount} replies',
+                style: TextStyle(
+                    color: cs.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openThread(PulseMessage m) {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => ThreadScreen(
+            parentMessageId: m.id,
+            channelName: widget.channelName,
+          ),
+        ))
+        .then((_) => _load());
   }
 
   Widget _reactionChips(PulseMessage m) {

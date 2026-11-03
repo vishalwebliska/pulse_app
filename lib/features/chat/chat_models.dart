@@ -71,6 +71,7 @@ class PulseMessage {
     this.bodyRendered,
     this.createdAt,
     this.reactions = const [],
+    this.replyCount = 0,
   });
 
   final int id;
@@ -81,6 +82,7 @@ class PulseMessage {
   final String authorName;
   final DateTime? createdAt;
   final List<MessageReaction> reactions;
+  final int replyCount;
 
   PulseMessage copyWith({List<MessageReaction>? reactions}) => PulseMessage(
         id: id,
@@ -91,6 +93,7 @@ class PulseMessage {
         authorName: authorName,
         createdAt: createdAt,
         reactions: reactions ?? this.reactions,
+        replyCount: replyCount,
       );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {
@@ -114,6 +117,7 @@ class PulseMessage {
               .map((e) => MessageReaction.fromJson(e.cast<String, dynamic>()))
               .toList()
           : const [],
+      replyCount: (j['reply_count'] ?? 0) as int,
     );
   }
 }

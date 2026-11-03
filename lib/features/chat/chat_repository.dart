@@ -122,6 +122,29 @@ class ChatRepository {
     await _dio.delete('/pulse/messages/$messageId');
   }
 
+  // ---- Threads ----
+
+  /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }
+  Future<({PulseMessage parent, List<PulseMessage> replies})> thread(
+      int messageId) async {
+    final res = await _dio.get('/pulse/messages/$messageId/thread');
+    final data = (res.data['data'] as Map).cast<String, dynamic>();
+    final parent =
+        PulseMessage.fromJson((data['parent'] as Map).cast<String, dynamic>());
+    final replies = (data['replies'] as List? ?? [])
+        .map((e) => PulseMessage.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+    return (parent: parent, replies: replies);
+  }
+
+  /// POST /pulse/messages/{id}/replies { body } → 201 { data: message }
+  Future<PulseMessage> replyInThread(int messageId, String body) async {
+    final res = await _dio.post('/pulse/messages/$messageId/replies',
+        data: {'body': body});
+    return PulseMessage.fromJson(
+        (res.data['data'] as Map).cast<String, dynamic>());
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.
