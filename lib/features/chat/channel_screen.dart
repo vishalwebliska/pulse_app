@@ -577,43 +577,118 @@ class _ChannelScreenState extends State<ChannelScreen> {
       controller: _scroll,
       padding: const EdgeInsets.all(12),
       itemCount: _messages.length,
-      itemBuilder: (context, i) => _messageTile(_messages[i]),
+      itemBuilder: (context, i) {
+        final m = _messages[i];
+        final prev = i > 0 ? _messages[i - 1] : null;
+        final showDay = _showDaySeparator(prev, m);
+        final showHeader = showDay || _startsNewGroup(prev, m);
+        final tile = _messageTile(m, showHeader: showHeader);
+        if (!showDay) return tile;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [_daySeparator(m.createdAt), tile],
+        );
+      },
     );
   }
 
-  Widget _messageTile(PulseMessage m) {
+  bool _sameDay(DateTime? a, DateTime? b) {
+    if (a == null || b == null) return false;
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
+  }
+
+  bool _showDaySeparator(PulseMessage? prev, PulseMessage m) {
+    if (m.createdAt == null) return false;
+    if (prev == null || prev.createdAt == null) return true;
+    return !_sameDay(prev.createdAt, m.createdAt);
+  }
+
+  bool _startsNewGroup(PulseMessage? prev, PulseMessage m) {
+    if (prev == null) return true;
+    if (prev.userId != m.userId || prev.authorName != m.authorName) return true;
+    if (prev.createdAt == null || m.createdAt == null) return true;
+    return m.createdAt!.difference(prev.createdAt!).inMinutes.abs() > 5;
+  }
+
+  Widget _daySeparator(DateTime? dt) {
+    if (dt == null) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: cs.outlineVariant)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(_dayLabel(dt),
+                style: TextStyle(
+                    color: cs.outline,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ),
+          Expanded(child: Divider(color: cs.outlineVariant)),
+        ],
+      ),
+    );
+  }
+
+  String _dayLabel(DateTime dt) {
+    final l = dt.toLocal();
+    final now = DateTime.now();
+    final day = DateTime(l.year, l.month, l.day);
+    final today = DateTime(now.year, now.month, now.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Yesterday';
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June', //
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return l.year == now.year
+        ? '${l.day} ${months[l.month - 1]}'
+        : '${l.day} ${months[l.month - 1]} ${l.year}';
+  }
+
+  Widget _messageTile(PulseMessage m, {bool showHeader = true}) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onLongPress: () => _showMessageActions(m),
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: EdgeInsets.only(top: showHeader ? 8 : 1, bottom: 1),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(m.authorName,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(width: 8),
-                if (m.createdAt != null)
-                  Text(_time(m.createdAt!),
-                      style: TextStyle(color: cs.outline, fontSize: 11)),
-                if (m.editedAt != null) ...[
-                  const SizedBox(width: 6),
-                  Text('(edited)',
-                      style: TextStyle(
-                          color: cs.outline,
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic)),
+            if (showHeader) ...[
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(m.authorName,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 8),
+                  if (m.createdAt != null)
+                    Text(_time(m.createdAt!),
+                        style: TextStyle(color: cs.outline, fontSize: 11)),
+                  if (m.editedAt != null) ...[
+                    const SizedBox(width: 6),
+                    Text('(edited)',
+                        style: TextStyle(
+                            color: cs.outline,
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic)),
+                  ],
+                  if (m.isPinned) ...[
+                    const SizedBox(width: 6),
+                    Icon(Icons.push_pin, size: 12, color: cs.outline),
+                  ],
                 ],
-                if (m.isPinned) ...[
-                  const SizedBox(width: 6),
-                  Icon(Icons.push_pin, size: 12, color: cs.outline),
-                ],
-              ],
-            ),
-            const SizedBox(height: 2),
+              ),
+              const SizedBox(height: 2),
+            ],
             _body(m.body),
             _reactionChips(m),
             _replyCountRow(m),
@@ -930,5 +1005,10 @@ class _ChannelScreenState extends State<ChannelScreen> {
     return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
-  String _time(DateTime dt) => formatMessageTimestamp(dt);
+  String _time(DateTime dt) {
+    final l = dt.toLocal();
+    final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
+    final ampm = l.hour >= 12 ? 'PM' : 'AM';
+    return '$h:${l.minute.toString().padLeft(2, '0')} $ampm';
+  }
 }
