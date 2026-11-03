@@ -85,6 +85,9 @@ class MessageReaction {
       );
 }
 
+/// Delivery state for a locally-composed message before the server confirms it.
+enum MessageSendState { sent, sending, failed }
+
 class PulseMessage {
   PulseMessage({
     required this.id,
@@ -99,6 +102,7 @@ class PulseMessage {
     this.editedAt,
     this.isPinned = false,
     this.isSaved = false,
+    this.sendState = MessageSendState.sent,
   });
 
   final int id;
@@ -113,6 +117,7 @@ class PulseMessage {
   final DateTime? editedAt;
   final bool isPinned;
   final bool isSaved;
+  final MessageSendState sendState;
 
   PulseMessage copyWith({
     List<MessageReaction>? reactions,
@@ -120,6 +125,7 @@ class PulseMessage {
     DateTime? editedAt,
     bool? isPinned,
     bool? isSaved,
+    MessageSendState? sendState,
   }) =>
       PulseMessage(
         id: id,
@@ -134,6 +140,7 @@ class PulseMessage {
         editedAt: editedAt ?? this.editedAt,
         isPinned: isPinned ?? this.isPinned,
         isSaved: isSaved ?? this.isSaved,
+        sendState: sendState ?? this.sendState,
       );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {

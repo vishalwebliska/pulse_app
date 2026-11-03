@@ -41,7 +41,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   final _scroll = ScrollController();
   List<PulseMessage> _messages = [];
   bool _loading = true;
-  bool _sending = false;
+  int _nextTempId = -1;
   String? _error;
   int? _userId;
   PulseRealtime? _realtime;
@@ -113,10 +113,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
     if (p['parent_message_id'] != null) return; // thread reply, not the main list
     final id = p['message_id'] as int;
     if (_messages.any((m) => m.id == id)) return; // dedup (incl. our own echo)
+    final body = (p['body'] ?? '') as String;
+    final uid = p['user_id'] as int?;
     final msg = PulseMessage(
       id: id,
-      userId: p['user_id'] as int?,
-      body: (p['body'] ?? '') as String,
+      userId: uid,
+      body: body,
       bodyRendered: p['body_rendered'] as String?,
       kind: 'user',
       authorName: (p['user_name'] ?? 'Someone') as String,
@@ -124,6 +126,17 @@ class _ChannelScreenState extends State<ChannelScreen> {
           ? DateTime.tryParse(p['created_at'] as String)
           : null,
     );
+    // Reconcile our own optimistic bubble (sent over HTTP, echoed over Reverb)
+    // so the message doesn't briefly appear twice.
+    final tmpIdx = _messages.indexWhere((m) =>
+        m.sendState == MessageSendState.sending &&
+        m.userId == uid &&
+        m.body == body);
+    if (tmpIdx != -1) {
+      setState(() => _messages = [..._messages]..[tmpIdx] = msg);
+      _markRead();
+      return;
+    }
     setState(() => _messages = [..._messages, msg]);
     _jumpToBottom();
     _markRead();
@@ -210,29 +223,69 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   Future<void> _send() async {
     final text = _composer.text.trim();
-    if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
+    if (text.isEmpty) return;
+    // Show the message right away with a "sending" state; the composer clears
+    // immediately so it feels instant instead of waiting on the round-trip.
+    final tempId = _nextTempId--;
+    final optimistic = PulseMessage(
+      id: tempId,
+      userId: _userId,
+      body: text,
+      kind: 'user',
+      authorName: 'You',
+      createdAt: DateTime.now(),
+      sendState: MessageSendState.sending,
+    );
+    setState(() {
+      _messages = [..._messages, optimistic];
+      _composer.clear();
+    });
+    _clearMentions();
+    _jumpToBottom();
+    await _deliver(tempId, text);
+  }
+
+  Future<void> _deliver(int tempId, String text) async {
     try {
       final msg = widget.isDm
           ? await ChatRepository.instance.sendDm(widget.channelId, text)
           : await ChatRepository.instance.send(widget.channelId, text);
       if (!mounted) return;
       setState(() {
-        if (!_messages.any((m) => m.id == msg.id)) {
+        final idx = _messages.indexWhere((m) => m.id == tempId);
+        if (_messages.any((m) => m.id == msg.id)) {
+          // The Reverb echo already placed the real message; drop the stub.
+          if (idx != -1) _messages = [..._messages]..removeAt(idx);
+        } else if (idx != -1) {
+          _messages = [..._messages]..[idx] = msg;
+        } else {
           _messages = [..._messages, msg];
         }
-        _composer.clear();
-        _sending = false;
       });
-      _clearMentions();
       _jumpToBottom();
     } on DioException {
       if (!mounted) return;
-      setState(() => _sending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message not sent.')),
-      );
+      setState(() {
+        final idx = _messages.indexWhere((m) => m.id == tempId);
+        if (idx != -1) {
+          final updated = [..._messages];
+          updated[idx] =
+              updated[idx].copyWith(sendState: MessageSendState.failed);
+          _messages = updated;
+        }
+      });
     }
+  }
+
+  Future<void> _retry(PulseMessage failed) async {
+    final idx = _messages.indexWhere((m) => m.id == failed.id);
+    if (idx == -1) return;
+    setState(() {
+      final updated = [..._messages];
+      updated[idx] = updated[idx].copyWith(sendState: MessageSendState.sending);
+      _messages = updated;
+    });
+    await _deliver(failed.id, failed.body);
   }
 
   // ---- Reactions + message actions ----
@@ -654,7 +707,9 @@ class _ChannelScreenState extends State<ChannelScreen> {
   Widget _messageTile(PulseMessage m, {bool showHeader = true}) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
-      onLongPress: () => _showMessageActions(m),
+      onLongPress: m.sendState == MessageSendState.sent
+          ? () => _showMessageActions(m)
+          : null,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: EdgeInsets.only(top: showHeader ? 8 : 1, bottom: 1),
@@ -689,7 +744,32 @@ class _ChannelScreenState extends State<ChannelScreen> {
               ),
               const SizedBox(height: 2),
             ],
-            _body(m.body),
+            if (m.sendState == MessageSendState.sending)
+              Opacity(opacity: 0.6, child: _body(m.body))
+            else
+              _body(m.body),
+            if (m.sendState == MessageSendState.sending)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('Sending…',
+                    style: TextStyle(color: cs.outline, fontSize: 11)),
+              ),
+            if (m.sendState == MessageSendState.failed)
+              InkWell(
+                onTap: () => _retry(m),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline, size: 13, color: cs.error),
+                      const SizedBox(width: 4),
+                      Text('Not sent — tap to retry',
+                          style: TextStyle(color: cs.error, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ),
             _reactionChips(m),
             _replyCountRow(m),
           ],
@@ -984,13 +1064,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: _sending ? null : _send,
-              icon: _sending
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.send),
+              onPressed: _send,
+              icon: const Icon(Icons.send),
             ),
           ],
         ),

@@ -19,6 +19,7 @@ _Last updated: 2026-11-03_
 - **Flaxxa-web theme** — Inter font (google_fonts), Pulse orange `#F97316→#F59E0B` + navy-slate dark `#141C2E` (matching the web's design tokens), proper text sizing + AppBar/nav/input theming; fixed a message-text bug (Flutter's unstyled red/yellow `RichText` fallback → `Text.rich`).
 - **Message timestamps** — per-message clock time ("11:49 AM"); the date lives in the day separator.
 - **Day separators + grouping** — centered day dividers ("Today" / "Yesterday" / "3 November") between days, and consecutive messages from the same author within 5 min collapse under one name+time header (Slack/Teams-style).
+- **Optimistic send** — a sent message appears instantly with a faint "Sending…" state and the composer clears immediately; it flips to confirmed when the API responds (reconciled against the Reverb echo so it never double-shows), or to a red "Not sent — tap to retry" on failure. Long-press actions are disabled on not-yet-confirmed messages.
 - **Read state** — opening a conversation marks it read (`POST /channels/{id}/read`), clearing the unread badge (channels + DMs).
 - **Activity inbox** — an **Activity** tab listing every @mention (unread/all toggle); tap to open the conversation + mark it read (`GET /pulse/mentions`, `PATCH /mentions/{id}/read`).
 - **Pins** — pin/unpin a message (long-press), a 📌 indicator on pinned messages, and a per-conversation **Pinned** view (`POST`/`DELETE /messages/{id}/pin`, `GET /channels/{id}/pins`).
