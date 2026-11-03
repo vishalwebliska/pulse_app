@@ -8,6 +8,7 @@ import '../../core/realtime.dart';
 import '../../core/token_store.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'search_screen.dart';
 import 'thread_screen.dart';
 
 /// A single conversation: message history + composer. Works for both regular
@@ -379,6 +380,13 @@ class _ChannelScreenState extends State<ChannelScreen> {
                 child: Text(widget.channelName, overflow: TextOverflow.ellipsis)),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Search this conversation',
+            onPressed: _openChannelSearch,
+            icon: const Icon(Icons.search),
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -477,6 +485,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
           ),
         ))
         .then((_) => _load());
+  }
+
+  void _openChannelSearch() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => SearchScreen(
+        channelId: widget.channelId,
+        channelName: widget.channelName,
+      ),
+    ));
   }
 
   Widget _reactionChips(PulseMessage m) {

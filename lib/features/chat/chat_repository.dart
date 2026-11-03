@@ -145,6 +145,22 @@ class ChatRepository {
         (res.data['data'] as Map).cast<String, dynamic>());
   }
 
+  // ---- Message search ----
+
+  /// GET /pulse/search?q=&channel_id= → { data:[...], meta }.
+  /// Global (no channelId) is plan-gated — a 402 DioException means the
+  /// workspace plan lacks `pulse.search.global`; search within a channel works.
+  Future<List<SearchResult>> searchMessages(String q,
+      {int? channelId, int limit = 50}) async {
+    final qp = <String, dynamic>{'q': q, 'limit': limit};
+    if (channelId != null) qp['channel_id'] = channelId;
+    final res = await _dio.get('/pulse/search', queryParameters: qp);
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) => SearchResult.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.

@@ -8,6 +8,7 @@ import 'channel_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'new_group_screen.dart';
+import 'search_screen.dart';
 
 /// The Chat tab: the workspace's channels + direct messages. The app-bar title
 /// is a workspace switcher; a search button finds people (and starts a DM); a
@@ -59,6 +60,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  void _openSearch() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const SearchScreen()));
+  }
+
   void _openPeopleSearch() {
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => const PeopleSearchScreen()))
@@ -97,19 +103,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         title: _buildTitle(auth),
         actions: [
           IconButton(
+            tooltip: 'Search messages',
+            onPressed: _openSearch,
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
             tooltip: 'Find people',
             onPressed: _openPeopleSearch,
-            icon: const Icon(Icons.search),
+            icon: const Icon(Icons.person_search_outlined),
           ),
           IconButton(
             tooltip: 'New group',
             onPressed: _openNewGroup,
             icon: const Icon(Icons.group_add_outlined),
-          ),
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh),
           ),
         ],
       ),

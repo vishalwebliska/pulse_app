@@ -122,6 +122,43 @@ class PulseMessage {
   }
 }
 
+/// A message search hit from `GET /pulse/search` (carries its channel).
+class SearchResult {
+  const SearchResult({
+    required this.messageId,
+    required this.body,
+    required this.authorName,
+    required this.channelId,
+    required this.channelName,
+    required this.channelKind,
+  });
+
+  final int messageId;
+  final String body;
+  final String authorName;
+  final int channelId;
+  final String channelName;
+  final String channelKind;
+
+  bool get isDm => channelKind == 'dm' || channelKind == 'group_dm';
+
+  factory SearchResult.fromJson(Map<String, dynamic> j) {
+    final user = j['user'];
+    final channel = j['channel'];
+    return SearchResult(
+      messageId: j['id'] as int,
+      body: (j['body'] ?? '') as String,
+      authorName: (user is Map && user['name'] != null)
+          ? user['name'] as String
+          : 'Someone',
+      channelId: (channel is Map ? channel['id'] as int? : null) ?? 0,
+      channelName: channel is Map ? (channel['name'] ?? '').toString() : '',
+      channelKind:
+          channel is Map ? (channel['kind'] ?? 'public').toString() : 'public',
+    );
+  }
+}
+
 /// A workspace member from `GET /pulse/members/directory` — used by the
 /// people-search picker and the @-mention autocomplete.
 class PulseMember {
