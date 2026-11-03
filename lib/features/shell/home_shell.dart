@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../activity/activity_page.dart';
 import '../chat/chat_page.dart';
 import '../me/me_page.dart';
 import '../meetings/meetings_page.dart';
@@ -16,6 +17,7 @@ class _HomeShellState extends State<HomeShell> {
 
   static const List<Widget> _pages = [
     ChatPage(),
+    ActivityPage(),
     MeetingsPage(),
     MePage(),
   ];
@@ -32,6 +34,11 @@ class _HomeShellState extends State<HomeShell> {
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
             label: 'Chat',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_outlined),
+            selectedIcon: Icon(Icons.notifications),
+            label: 'Activity',
           ),
           NavigationDestination(
             icon: Icon(Icons.videocam_outlined),

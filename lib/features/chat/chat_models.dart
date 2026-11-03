@@ -194,6 +194,47 @@ class SearchResult {
   }
 }
 
+/// A mention of the current user from `GET /pulse/mentions` (flattened shape).
+class Mention {
+  const Mention({
+    required this.id,
+    required this.messageId,
+    required this.channelId,
+    required this.channelName,
+    required this.channelKind,
+    required this.authorName,
+    this.body,
+    this.mentionedAt,
+    this.read = false,
+  });
+
+  final int id;
+  final int messageId;
+  final int channelId;
+  final String channelName;
+  final String channelKind;
+  final String authorName;
+  final String? body;
+  final DateTime? mentionedAt;
+  final bool read;
+
+  bool get isDm => channelKind == 'dm' || channelKind == 'group_dm';
+
+  factory Mention.fromJson(Map<String, dynamic> j) => Mention(
+        id: j['id'] as int,
+        messageId: (j['message_id'] ?? 0) as int,
+        channelId: (j['channel_id'] ?? 0) as int,
+        channelName: (j['channel_name'] ?? '') as String,
+        channelKind: (j['channel_kind'] ?? 'public') as String,
+        authorName: (j['author_name'] ?? 'Someone') as String,
+        body: j['body'] as String?,
+        mentionedAt: j['mentioned_at'] != null
+            ? DateTime.tryParse(j['mentioned_at'] as String)
+            : null,
+        read: j['read_at'] != null,
+      );
+}
+
 /// A workspace member from `GET /pulse/members/directory` — used by the
 /// people-search picker and the @-mention autocomplete.
 class PulseMember {

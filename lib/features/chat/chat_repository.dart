@@ -177,6 +177,23 @@ class ChatRepository {
         .toList();
   }
 
+  // ---- Mentions inbox ----
+
+  /// GET /pulse/mentions?filter=unread|all → { data: [ ... ] } (newest first).
+  Future<List<Mention>> mentions({String filter = 'all'}) async {
+    final res = await _dio
+        .get('/pulse/mentions', queryParameters: {'filter': filter});
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) => Mention.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// PATCH /pulse/mentions/{id}/read — mark one mention read.
+  Future<void> markMentionRead(int mentionId) async {
+    await _dio.patch('/pulse/mentions/$mentionId/read');
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.
