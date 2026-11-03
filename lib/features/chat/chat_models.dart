@@ -10,17 +10,31 @@ class PulseChannel {
     required this.isGeneral,
     required this.unreadCount,
     this.topic,
+    this.displayName,
   });
 
   final int id;
   final String name;
   final String slug;
-  final String kind; // public | private
+  final String kind; // public | private | dm | group_dm
   final bool isGeneral;
   final int unreadCount;
   final String? topic;
 
+  /// Set for DMs by `GET /pulse/dms` — the other person's name (1:1) or a
+  /// comma-joined label (group DM). Null for regular channels.
+  final String? displayName;
+
   bool get isPrivate => kind == 'private';
+  bool get isDm => kind == 'dm' || kind == 'group_dm';
+  bool get isGroupDm => kind == 'group_dm';
+
+  /// What to show as the conversation title.
+  String get title {
+    if (displayName != null && displayName!.isNotEmpty) return displayName!;
+    if (name.isNotEmpty) return name;
+    return isDm ? 'Direct message' : 'Channel';
+  }
 
   factory PulseChannel.fromJson(Map<String, dynamic> j) => PulseChannel(
         id: j['id'] as int,
@@ -30,6 +44,7 @@ class PulseChannel {
         isGeneral: (j['is_general'] ?? false) as bool,
         unreadCount: (j['unread_count'] ?? 0) as int,
         topic: j['topic'] as String?,
+        displayName: j['display_name'] as String?,
       );
 }
 
@@ -68,4 +83,34 @@ class PulseMessage {
           : null,
     );
   }
+}
+
+/// A workspace member from `GET /pulse/members/directory` — used by the
+/// people-search picker and the @-mention autocomplete.
+class PulseMember {
+  PulseMember({
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.status,
+    required this.online,
+  });
+
+  final int userId;
+  final String name;
+  final String email;
+  final String status; // active | invited
+  final bool online;
+
+  /// The @-mention token the server resolves: the display name with spaces
+  /// removed (verified: `@PulseTesterTwo` resolves to "Pulse Tester Two").
+  String get mentionToken => name.replaceAll(RegExp(r'\s+'), '');
+
+  factory PulseMember.fromJson(Map<String, dynamic> j) => PulseMember(
+        userId: j['user_id'] as int,
+        name: (j['name'] ?? '') as String,
+        email: (j['email'] ?? '') as String,
+        status: (j['status'] ?? 'active') as String,
+        online: (j['online'] ?? false) as bool,
+      );
 }

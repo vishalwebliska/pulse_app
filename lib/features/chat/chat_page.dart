@@ -1,11 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
+import '../people/people_search_screen.dart';
 import 'channel_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'new_group_screen.dart';
 
-/// The Chat tab: the workspace's channel list. Tapping a channel opens it.
+/// The Chat tab: the workspace's channels + direct messages. A search button
+/// finds people (and starts a DM); a group button creates a new group.
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
 
@@ -15,6 +18,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   List<PulseChannel>? _channels;
+  List<PulseChannel>? _dms;
   bool _loading = true;
   String? _error;
 
@@ -30,10 +34,15 @@ class _ChatPageState extends State<ChatPage> {
       _error = null;
     });
     try {
-      final chs = await ChatRepository.instance.channels();
+      // DMs are a separate endpoint; fetch both together.
+      final results = await Future.wait([
+        ChatRepository.instance.channels(),
+        ChatRepository.instance.dms(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _channels = chs;
+        _channels = results[0];
+        _dms = results[1];
         _loading = false;
       });
     } on DioException catch (e) {
@@ -42,9 +51,34 @@ class _ChatPageState extends State<ChatPage> {
         _loading = false;
         _error = e.response?.statusCode == 403
             ? "Pulse isn't enabled for this workspace yet."
-            : "Couldn't load channels. Pull down to retry.";
+            : "Couldn't load conversations. Pull down to retry.";
       });
     }
+  }
+
+  void _openPeopleSearch() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const PeopleSearchScreen()))
+        .then((_) => _load());
+  }
+
+  void _openNewGroup() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => const NewGroupScreen()))
+        .then((_) => _load());
+  }
+
+  void _openConversation(PulseChannel c) {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => ChannelScreen(
+            channelId: c.id,
+            channelName: c.title,
+            kind: c.kind,
+            isDm: c.isDm,
+          ),
+        ))
+        .then((_) => _load());
   }
 
   @override
@@ -53,7 +87,21 @@ class _ChatPageState extends State<ChatPage> {
       appBar: AppBar(
         title: const Text('Pulse'),
         actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+            tooltip: 'Find people',
+            onPressed: _openPeopleSearch,
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
+            tooltip: 'New group',
+            onPressed: _openNewGroup,
+            icon: const Icon(Icons.group_add_outlined),
+          ),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
       body: RefreshIndicator(onRefresh: _load, child: _buildBody()),
@@ -63,33 +111,61 @@ class _ChatPageState extends State<ChatPage> {
   Widget _buildBody() {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return _centered(_error!);
+
     final channels = _channels ?? [];
-    if (channels.isEmpty) return _centered('No channels yet.');
-    return ListView.separated(
-      itemCount: channels.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, i) {
-        final c = channels[i];
-        return ListTile(
-          leading: CircleAvatar(
-            child: Icon(c.isPrivate ? Icons.lock_outline : Icons.tag),
-          ),
-          title: Text(c.name),
-          subtitle: (c.topic != null && c.topic!.isNotEmpty)
-              ? Text(c.topic!, maxLines: 1, overflow: TextOverflow.ellipsis)
-              : null,
-          trailing: c.unreadCount > 0 ? _badge(c.unreadCount) : null,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ChannelScreen(
-                channelId: c.id,
-                channelName: c.name,
-                kind: c.kind,
-              ),
-            ),
-          ),
-        );
-      },
+    final dms = _dms ?? [];
+    if (channels.isEmpty && dms.isEmpty) {
+      return _centered('No conversations yet.');
+    }
+
+    return ListView(
+      children: [
+        if (channels.isNotEmpty) _sectionHeader('Channels'),
+        ...channels.map(_channelTile),
+        if (dms.isNotEmpty) _sectionHeader('Direct messages'),
+        ...dms.map(_dmTile),
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String label) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: cs.outline,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _channelTile(PulseChannel c) {
+    return ListTile(
+      leading: CircleAvatar(
+        child: Icon(c.isPrivate ? Icons.lock_outline : Icons.tag),
+      ),
+      title: Text(c.name),
+      subtitle: (c.topic != null && c.topic!.isNotEmpty)
+          ? Text(c.topic!, maxLines: 1, overflow: TextOverflow.ellipsis)
+          : null,
+      trailing: c.unreadCount > 0 ? _badge(c.unreadCount) : null,
+      onTap: () => _openConversation(c),
+    );
+  }
+
+  Widget _dmTile(PulseChannel c) {
+    return ListTile(
+      leading: CircleAvatar(
+        child: Icon(c.isGroupDm ? Icons.group_outlined : Icons.person_outline),
+      ),
+      title: Text(c.title),
+      trailing: c.unreadCount > 0 ? _badge(c.unreadCount) : null,
+      onTap: () => _openConversation(c),
     );
   }
 
