@@ -1,6 +1,30 @@
 // Pulse chat models. Fields map to the `/api/v1/pulse/*` JSON (no API Resources
 // server-side, so we read the keys we need and ignore the rest).
 
+/// Human-friendly message timestamp with date + time:
+/// "Today 11:49 AM", "Yesterday 6:42 PM", "3 Nov, 11:49 AM", or
+/// "3 Nov 2025, 11:49 AM" for older years.
+String formatMessageTimestamp(DateTime dt) {
+  final l = dt.toLocal();
+  final now = DateTime.now();
+  final day = DateTime(l.year, l.month, l.day);
+  final today = DateTime(now.year, now.month, now.day);
+  final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
+  final ampm = l.hour >= 12 ? 'PM' : 'AM';
+  final time = '$h:${l.minute.toString().padLeft(2, '0')} $ampm';
+  final diff = today.difference(day).inDays;
+  if (diff == 0) return 'Today $time';
+  if (diff == 1) return 'Yesterday $time';
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  final date = l.year == now.year
+      ? '${l.day} ${months[l.month - 1]}'
+      : '${l.day} ${months[l.month - 1]} ${l.year}';
+  return '$date, $time';
+}
+
 class PulseChannel {
   PulseChannel({
     required this.id,

@@ -633,9 +633,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
       last = match.end;
     }
     if (last < body.length) spans.add(TextSpan(text: body.substring(last)));
-    // Text.rich inherits the ambient text style (fixes the "unstyled" red/
-    // yellow fallback that RichText shows without a resolved base style).
-    return Text.rich(TextSpan(children: spans));
+    // Explicit body style + Text.rich guarantees a resolved text style,
+    // avoiding Flutter's red/yellow "unstyled text" fallback.
+    return Text.rich(
+      TextSpan(children: spans),
+      style: Theme.of(context).textTheme.bodyMedium,
+    );
   }
 
   Widget _buildMentionBar() {
@@ -715,10 +718,5 @@ class _ChannelScreenState extends State<ChannelScreen> {
     return (parts.first[0] + parts.last[0]).toUpperCase();
   }
 
-  String _time(DateTime dt) {
-    final l = dt.toLocal();
-    final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
-    final ampm = l.hour >= 12 ? 'PM' : 'AM';
-    return '$h:${l.minute.toString().padLeft(2, '0')} $ampm';
-  }
+  String _time(DateTime dt) => formatMessageTimestamp(dt);
 }

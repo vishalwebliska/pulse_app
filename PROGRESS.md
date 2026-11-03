@@ -17,6 +17,7 @@ _Last updated: 2026-11-03_
 - **Threads / replies** — "N replies" indicator + thread view (root + replies + composer).
 - **Message search** — scoped (in-channel, always available) + global (workspace-wide, plan-gated → shows upgrade notice on 402). Entry: Chat-tab search icon (global) + each channel's search button (scoped).
 - **Flaxxa-web theme** — Inter font (google_fonts), Pulse orange `#F97316→#F59E0B` + navy-slate dark `#141C2E` (matching the web's design tokens), proper text sizing + AppBar/nav/input theming; fixed a message-text bug (Flutter's unstyled red/yellow `RichText` fallback → `Text.rich`).
+- **Message timestamps** — show date + time ("Today 11:49 AM" / "Yesterday …" / "3 Nov, 11:49 AM").
 - **Read state** — opening a conversation marks it read (`POST /channels/{id}/read`), clearing the unread badge (channels + DMs).
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
