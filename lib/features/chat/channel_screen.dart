@@ -628,17 +628,21 @@ class _ChannelScreenState extends State<ChannelScreen> {
     }
     return ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _messages.length,
       itemBuilder: (context, i) {
         final m = _messages[i];
         final prev = i > 0 ? _messages[i - 1] : null;
+        final next = i < _messages.length - 1 ? _messages[i + 1] : null;
         final showDay = _showDaySeparator(prev, m);
-        final showHeader = showDay || _startsNewGroup(prev, m);
-        final tile = _messageTile(m, showHeader: showHeader);
+        final groupStart = showDay || _isGroupStart(prev, m);
+        final groupEnd = _isGroupEnd(m, next);
+        final showTime = _showTime(m, next);
+        final tile = _messageTile(m,
+            groupStart: groupStart, groupEnd: groupEnd, showTime: showTime);
         if (!showDay) return tile;
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [_daySeparator(m.createdAt), tile],
         );
       },
@@ -652,36 +656,77 @@ class _ChannelScreenState extends State<ChannelScreen> {
     return la.year == lb.year && la.month == lb.month && la.day == lb.day;
   }
 
+  bool _sameMinute(DateTime? a, DateTime? b) {
+    if (a == null || b == null) return false;
+    final la = a.toLocal();
+    final lb = b.toLocal();
+    return la.year == lb.year &&
+        la.month == lb.month &&
+        la.day == lb.day &&
+        la.hour == lb.hour &&
+        la.minute == lb.minute;
+  }
+
   bool _showDaySeparator(PulseMessage? prev, PulseMessage m) {
     if (m.createdAt == null) return false;
     if (prev == null || prev.createdAt == null) return true;
     return !_sameDay(prev.createdAt, m.createdAt);
   }
 
-  bool _startsNewGroup(PulseMessage? prev, PulseMessage m) {
+  // Same-author grouping: a run breaks on a different author, a new day, or a
+  // gap over 60 min (a long pause starts a fresh avatar) — mirrors the web app.
+  static const int _groupGapMinutes = 60;
+
+  bool _isGroupStart(PulseMessage? prev, PulseMessage m) {
     if (prev == null) return true;
-    if (prev.userId != m.userId || prev.authorName != m.authorName) return true;
+    if (prev.userId != m.userId) return true;
     if (prev.createdAt == null || m.createdAt == null) return true;
-    return m.createdAt!.difference(prev.createdAt!).inMinutes.abs() > 5;
+    if (!_sameDay(prev.createdAt, m.createdAt)) return true;
+    return m.createdAt!.difference(prev.createdAt!).inMinutes.abs() >
+        _groupGapMinutes;
+  }
+
+  bool _isGroupEnd(PulseMessage m, PulseMessage? next) {
+    if (next == null) return true;
+    if (next.userId != m.userId) return true;
+    if (m.createdAt == null || next.createdAt == null) return true;
+    if (!_sameDay(m.createdAt, next.createdAt)) return true;
+    return next.createdAt!.difference(m.createdAt!).inMinutes.abs() >
+        _groupGapMinutes;
+  }
+
+  // Show one timestamp per same-author, same-minute burst (under the last one).
+  bool _showTime(PulseMessage m, PulseMessage? next) {
+    if (next == null) return true;
+    if (next.userId == m.userId && _sameMinute(m.createdAt, next.createdAt)) {
+      return false;
+    }
+    return true;
   }
 
   Widget _daySeparator(DateTime? dt) {
     if (dt == null) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
       child: Row(
         children: [
-          Expanded(child: Divider(color: cs.outlineVariant)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+          Expanded(child: Container(height: 1, color: cs.outlineVariant)),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: cs.outlineVariant),
+            ),
             child: Text(_dayLabel(dt),
                 style: TextStyle(
                     color: cs.outline,
-                    fontSize: 12,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600)),
           ),
-          Expanded(child: Divider(color: cs.outlineVariant)),
+          Expanded(child: Container(height: 1, color: cs.outlineVariant)),
         ],
       ),
     );
@@ -695,85 +740,194 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final diff = today.difference(day).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June', //
-      'July', 'August', 'September', 'October', 'November', 'December'
+    const weekdays = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+      'Sunday'
     ];
-    return l.year == now.year
-        ? '${l.day} ${months[l.month - 1]}'
-        : '${l.day} ${months[l.month - 1]} ${l.year}';
+    if (diff > 1 && diff < 7) return weekdays[l.weekday - 1];
+    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const mon = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final base = '${wd[l.weekday - 1]}, ${mon[l.month - 1]} ${l.day}';
+    return l.year == now.year ? base : '$base ${l.year}';
   }
 
-  Widget _messageTile(PulseMessage m, {bool showHeader = true}) {
+  // Avatar gradients — deterministic per user id (mirrors the web palette).
+  static const List<List<Color>> _avatarPalette = [
+    [Color(0xFFFDA4AF), Color(0xFFF43F5E)], // rose
+    [Color(0xFFFCD34D), Color(0xFFF59E0B)], // amber
+    [Color(0xFF6EE7B7), Color(0xFF10B981)], // emerald
+    [Color(0xFF7DD3FC), Color(0xFF0EA5E9)], // sky
+    [Color(0xFFA5B4FC), Color(0xFF6366F1)], // indigo
+    [Color(0xFFD8B4FE), Color(0xFFA855F7)], // purple
+    [Color(0xFF5EEAD4), Color(0xFF14B8A6)], // teal
+    [Color(0xFFFDBA74), Color(0xFFF97316)], // orange
+  ];
+  static const List<Color> _ownAvatar = [Color(0xFF94A3B8), Color(0xFF64748B)];
+
+  Widget _avatar(PulseMessage m, bool isOwn) {
+    final pair = isOwn
+        ? _ownAvatar
+        : _avatarPalette[(m.userId ?? 0).abs() % _avatarPalette.length];
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight, colors: pair),
+      ),
+      alignment: Alignment.center,
+      child: Text(_initials(m.authorName),
+          style: const TextStyle(
+              color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _messageTile(PulseMessage m,
+      {required bool groupStart,
+      required bool groupEnd,
+      required bool showTime}) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isOwn = _userId != null && m.userId == _userId;
+    const brand = Color(0xFFF97316);
+    final bubbleColor =
+        isOwn ? brand : (isDark ? const Color(0xFF1B2438) : Colors.white);
+    final textColor = isOwn ? Colors.white : cs.onSurface;
+
+    final bubble = GestureDetector(
       onLongPress: m.sendState == MessageSendState.sent
           ? () => _showMessageActions(m)
           : null,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: EdgeInsets.only(top: showHeader ? 8 : 1, bottom: 1),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (showHeader) ...[
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(m.authorName,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis),
-                  ),
-                  const SizedBox(width: 8),
-                  if (m.createdAt != null)
-                    Text(_time(m.createdAt!),
-                        style: TextStyle(color: cs.outline, fontSize: 11)),
-                  if (m.editedAt != null) ...[
-                    const SizedBox(width: 6),
-                    Text('(edited)',
-                        style: TextStyle(
-                            color: cs.outline,
-                            fontSize: 11,
-                            fontStyle: FontStyle.italic)),
-                  ],
-                  if (m.isPinned) ...[
-                    const SizedBox(width: 6),
-                    Icon(Icons.push_pin, size: 12, color: cs.outline),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 2),
+      child: Opacity(
+        opacity: m.sendState == MessageSendState.sending ? 0.7 : 1,
+        child: Container(
+          constraints:
+              BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.72),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: _bubbleRadius(isOwn, groupStart, groupEnd),
+            border: isOwn
+                ? null
+                : Border.all(color: cs.outlineVariant.withValues(alpha: 0.7)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
+                  blurRadius: 3,
+                  offset: const Offset(0, 1)),
             ],
-            if (m.sendState == MessageSendState.sending)
-              Opacity(opacity: 0.6, child: _body(m.body))
-            else
-              _body(m.body),
-            if (m.sendState == MessageSendState.sending)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text('Sending…',
-                    style: TextStyle(color: cs.outline, fontSize: 11)),
-              ),
-            if (m.sendState == MessageSendState.failed)
-              InkWell(
-                onTap: () => _retry(m),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline, size: 13, color: cs.error),
-                      const SizedBox(width: 4),
-                      Text('Not sent — tap to retry',
-                          style: TextStyle(color: cs.error, fontSize: 11)),
-                    ],
-                  ),
-                ),
-              ),
-            _reactionChips(m),
-            _replyCountRow(m),
-          ],
+          ),
+          child: _body(m.body, color: textColor),
         ),
+      ),
+    );
+
+    final col = Column(
+      crossAxisAlignment:
+          isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        if (groupStart && !isOwn)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 2),
+            child: Text(m.authorName,
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    color: cs.onSurface)),
+          ),
+        bubble,
+        if (isOwn && m.sendState == MessageSendState.sending)
+          _statusLabel('Sending…', cs.outline),
+        if (isOwn && m.sendState == MessageSendState.failed)
+          InkWell(
+            onTap: () => _retry(m),
+            child: _statusLabel('Not sent — tap to retry', cs.error,
+                icon: Icons.error_outline),
+          ),
+        if (showTime &&
+            m.createdAt != null &&
+            m.sendState == MessageSendState.sent)
+          Padding(
+            padding: const EdgeInsets.only(top: 3, left: 4, right: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_time(m.createdAt!),
+                    style: TextStyle(color: cs.outline, fontSize: 10)),
+                if (m.editedAt != null) ...[
+                  const SizedBox(width: 5),
+                  Text('(edited)',
+                      style: TextStyle(
+                          color: cs.outline,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic)),
+                ],
+                if (m.isPinned) ...[
+                  const SizedBox(width: 5),
+                  Icon(Icons.push_pin, size: 11, color: cs.outline),
+                ],
+              ],
+            ),
+          ),
+        _reactionChips(m),
+        _replyCountRow(m),
+      ],
+    );
+
+    final avatarOrSpacer =
+        groupStart ? _avatar(m, isOwn) : const SizedBox(width: 32);
+
+    final rowChildren = isOwn
+        ? [Expanded(child: col), const SizedBox(width: 8), avatarOrSpacer]
+        : [avatarOrSpacer, const SizedBox(width: 8), Expanded(child: col)];
+
+    return Padding(
+      padding: EdgeInsets.only(
+          left: 10,
+          right: 10,
+          top: groupStart ? 8 : 1.5,
+          bottom: groupEnd ? 6 : 1.5),
+      child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start, children: rowChildren),
+    );
+  }
+
+  BorderRadius _bubbleRadius(bool isOwn, bool groupStart, bool groupEnd) {
+    const r = Radius.circular(16);
+    const tight = Radius.circular(5);
+    final topInner = groupStart ? r : tight;
+    final bottomInner = groupEnd ? r : tight;
+    if (isOwn) {
+      return BorderRadius.only(
+          topLeft: r,
+          bottomLeft: r,
+          topRight: topInner,
+          bottomRight: bottomInner);
+    }
+    return BorderRadius.only(
+        topRight: r,
+        bottomRight: r,
+        topLeft: topInner,
+        bottomLeft: bottomInner);
+  }
+
+  Widget _statusLabel(String text, Color color, {IconData? icon}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(text, style: TextStyle(color: color, fontSize: 10)),
+        ],
       ),
     );
   }
@@ -956,9 +1110,11 @@ class _ChannelScreenState extends State<ChannelScreen> {
     );
   }
 
-  /// Renders the message body with @mentions highlighted.
-  Widget _body(String body) {
+  /// Renders the message body with @mentions highlighted. [color] sets the base
+  /// text colour (white on own orange bubbles; null keeps the themed ink).
+  Widget _body(String body, {Color? color}) {
     final cs = Theme.of(context).colorScheme;
+    final mentionColor = color ?? cs.primary;
     final spans = <TextSpan>[];
     final re = RegExp(r'@[^\s@]+');
     var last = 0;
@@ -968,7 +1124,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       }
       spans.add(TextSpan(
         text: match.group(0),
-        style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+        style: TextStyle(color: mentionColor, fontWeight: FontWeight.w600),
       ));
       last = match.end;
     }
@@ -977,7 +1133,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
     // avoiding Flutter's red/yellow "unstyled text" fallback.
     return Text.rich(
       TextSpan(children: spans),
-      style: Theme.of(context).textTheme.bodyMedium,
+      style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+          .copyWith(color: color),
     );
   }
 
