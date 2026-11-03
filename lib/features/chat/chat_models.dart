@@ -48,6 +48,19 @@ class PulseChannel {
       );
 }
 
+/// One emoji reaction on a message (`{id, message_id, user_id, emoji}`).
+class MessageReaction {
+  const MessageReaction({required this.userId, required this.emoji});
+
+  final int userId;
+  final String emoji;
+
+  factory MessageReaction.fromJson(Map<String, dynamic> j) => MessageReaction(
+        userId: (j['user_id'] ?? 0) as int,
+        emoji: (j['emoji'] ?? '') as String,
+      );
+}
+
 class PulseMessage {
   PulseMessage({
     required this.id,
@@ -57,6 +70,7 @@ class PulseMessage {
     this.userId,
     this.bodyRendered,
     this.createdAt,
+    this.reactions = const [],
   });
 
   final int id;
@@ -66,9 +80,22 @@ class PulseMessage {
   final String kind; // user | system | bot
   final String authorName;
   final DateTime? createdAt;
+  final List<MessageReaction> reactions;
+
+  PulseMessage copyWith({List<MessageReaction>? reactions}) => PulseMessage(
+        id: id,
+        userId: userId,
+        body: body,
+        bodyRendered: bodyRendered,
+        kind: kind,
+        authorName: authorName,
+        createdAt: createdAt,
+        reactions: reactions ?? this.reactions,
+      );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {
     final user = j['user'];
+    final rawReactions = j['reactions'];
     return PulseMessage(
       id: j['id'] as int,
       userId: j['user_id'] as int?,
@@ -81,6 +108,12 @@ class PulseMessage {
       createdAt: j['created_at'] != null
           ? DateTime.tryParse(j['created_at'] as String)
           : null,
+      reactions: rawReactions is List
+          ? rawReactions
+              .whereType<Map>()
+              .map((e) => MessageReaction.fromJson(e.cast<String, dynamic>()))
+              .toList()
+          : const [],
     );
   }
 }

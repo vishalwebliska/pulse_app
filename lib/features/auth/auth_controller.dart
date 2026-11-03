@@ -10,10 +10,12 @@ import 'workspace.dart';
 enum AuthStatus { unknown, signedOut, signedIn }
 
 class AuthState {
-  const AuthState(this.status, {this.tenantId, this.workspaces = const []});
+  const AuthState(this.status,
+      {this.tenantId, this.userId, this.workspaces = const []});
 
   final AuthStatus status;
   final String? tenantId;
+  final int? userId;
   final List<Workspace> workspaces;
 
   /// The workspace matching the active tenant, if known.
@@ -27,11 +29,13 @@ class AuthState {
   AuthState copyWith({
     AuthStatus? status,
     String? tenantId,
+    int? userId,
     List<Workspace>? workspaces,
   }) =>
       AuthState(
         status ?? this.status,
         tenantId: tenantId ?? this.tenantId,
+        userId: userId ?? this.userId,
         workspaces: workspaces ?? this.workspaces,
       );
 }
@@ -46,10 +50,12 @@ class AuthController extends Notifier<AuthState> {
   Future<void> _bootstrap() async {
     final token = await TokenStore.instance.readToken();
     final tenant = await TokenStore.instance.readTenant();
+    final userId = await TokenStore.instance.readUserId();
     final workspaces = await _readStoredWorkspaces();
     state = AuthState(
       token != null ? AuthStatus.signedIn : AuthStatus.signedOut,
       tenantId: tenant,
+      userId: userId,
       workspaces: workspaces,
     );
     // Backfill the workspace list for sessions saved before this existed.
@@ -70,11 +76,14 @@ class AuthController extends Notifier<AuthState> {
       final token = data['token'] as String?;
       if (token == null) return 'Sign-in failed. Please try again.';
       final tenantId = data['tenant_id']?.toString();
+      final user = data['user'];
+      final userId = (user is Map) ? user['id'] as int? : null;
       final workspaces = _parseWorkspaces(data['workspaces']);
       await TokenStore.instance.save(token: token, tenantId: tenantId);
+      if (userId != null) await TokenStore.instance.writeUserId(userId);
       await _storeWorkspaces(workspaces);
       state = AuthState(AuthStatus.signedIn,
-          tenantId: tenantId, workspaces: workspaces);
+          tenantId: tenantId, userId: userId, workspaces: workspaces);
       return null;
     } on DioException catch (e) {
       switch (e.response?.statusCode) {

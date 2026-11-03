@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/realtime.dart';
 import '../../core/token_store.dart';
@@ -10,8 +11,8 @@ import 'chat_repository.dart';
 
 /// A single conversation: message history + composer. Works for both regular
 /// channels and DMs (set [isDm]). Live messages arrive over Reverb; sends also
-/// append locally. The composer offers @-mention autocomplete from the
-/// workspace directory.
+/// append locally. The composer offers @-mention autocomplete; long-pressing a
+/// message opens reactions + actions (copy, delete your own).
 class ChannelScreen extends StatefulWidget {
   const ChannelScreen({
     super.key,
@@ -37,6 +38,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   bool _loading = true;
   bool _sending = false;
   String? _error;
+  int? _userId;
   PulseRealtime? _realtime;
   StreamSubscription<Map<String, dynamic>>? _rtSub;
 
@@ -45,9 +47,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
   List<PulseMember> _mentionSuggestions = [];
   int _mentionAnchor = -1; // index of the active '@'
 
+  static const List<String> _quickEmojis = ['👍', '❤️', '😂', '🎉', '👀', '✅'];
+
   @override
   void initState() {
     super.initState();
+    _loadUserId();
     _load();
     _initRealtime();
     _loadMembers();
@@ -62,6 +67,11 @@ class _ChannelScreenState extends State<ChannelScreen> {
     _composer.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserId() async {
+    final id = await TokenStore.instance.readUserId();
+    if (mounted) setState(() => _userId = id);
   }
 
   Future<void> _initRealtime() async {
@@ -155,6 +165,123 @@ class _ChannelScreenState extends State<ChannelScreen> {
     }
   }
 
+  // ---- Reactions + message actions ----
+
+  void _showMessageActions(PulseMessage m) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  for (final e in _quickEmojis)
+                    InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _toggleReaction(m, e);
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(e, style: const TextStyle(fontSize: 26)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy text'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _copy(m);
+              },
+            ),
+            if (_userId != null && m.userId == _userId)
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete message'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete(m);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _copy(PulseMessage m) {
+    Clipboard.setData(ClipboardData(text: m.body));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Copied')));
+  }
+
+  Future<void> _toggleReaction(PulseMessage m, String emoji) async {
+    final uid = _userId;
+    if (uid == null) return;
+    final idx = _messages.indexWhere((x) => x.id == m.id);
+    if (idx < 0) return;
+    final had =
+        _messages[idx].reactions.any((r) => r.emoji == emoji && r.userId == uid);
+    final updated = [..._messages[idx].reactions];
+    if (had) {
+      updated.removeWhere((r) => r.emoji == emoji && r.userId == uid);
+    } else {
+      updated.add(MessageReaction(userId: uid, emoji: emoji));
+    }
+    setState(() {
+      _messages[idx] = _messages[idx].copyWith(reactions: updated);
+      _messages = [..._messages];
+    });
+    try {
+      if (had) {
+        await ChatRepository.instance.removeReaction(m.id, emoji);
+      } else {
+        await ChatRepository.instance.addReaction(m.id, emoji);
+      }
+    } on DioException {
+      _load(); // reconcile with the server on failure
+    }
+  }
+
+  Future<void> _confirmDelete(PulseMessage m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('This removes the message for everyone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ChatRepository.instance.deleteMessage(m.id);
+      if (!mounted) return;
+      setState(() => _messages = _messages.where((x) => x.id != m.id).toList());
+    } on DioException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't delete the message.")),
+      );
+    }
+  }
+
   // ---- @-mention autocomplete ----
 
   void _onComposerChanged() {
@@ -239,7 +366,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
           children: [
             Icon(leadingIcon, size: 18),
             const SizedBox(width: 6),
-            Flexible(child: Text(widget.channelName, overflow: TextOverflow.ellipsis)),
+            Flexible(
+                child: Text(widget.channelName, overflow: TextOverflow.ellipsis)),
           ],
         ),
       ),
@@ -274,23 +402,68 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   Widget _messageTile(PulseMessage m) {
     final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onLongPress: () => _showMessageActions(m),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(m.authorName,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                if (m.createdAt != null)
+                  Text(_time(m.createdAt!),
+                      style: TextStyle(color: cs.outline, fontSize: 11)),
+              ],
+            ),
+            const SizedBox(height: 2),
+            _body(m.body),
+            _reactionChips(m),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _reactionChips(PulseMessage m) {
+    if (m.reactions.isEmpty) return const SizedBox.shrink();
+    final counts = <String, int>{};
+    final mine = <String>{};
+    for (final r in m.reactions) {
+      counts[r.emoji] = (counts[r.emoji] ?? 0) + 1;
+      if (_userId != null && r.userId == _userId) mine.add(r.emoji);
+    }
+    final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
         children: [
-          Row(
-            children: [
-              Text(m.authorName,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(width: 8),
-              if (m.createdAt != null)
-                Text(_time(m.createdAt!),
-                    style: TextStyle(color: cs.outline, fontSize: 11)),
-            ],
-          ),
-          const SizedBox(height: 2),
-          _body(m.body),
+          for (final entry in counts.entries)
+            GestureDetector(
+              onTap: () => _toggleReaction(m, entry.key),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: mine.contains(entry.key)
+                      ? cs.primaryContainer
+                      : cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: mine.contains(entry.key)
+                        ? cs.primary
+                        : cs.outlineVariant,
+                  ),
+                ),
+                child: Text('${entry.key} ${entry.value}',
+                    style: const TextStyle(fontSize: 13)),
+              ),
+            ),
         ],
       ),
     );
@@ -337,8 +510,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
               child: Text(_initials(m.name), style: const TextStyle(fontSize: 11)),
             ),
             title: Text(m.name),
-            subtitle: Text(m.email,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle:
+                Text(m.email, maxLines: 1, overflow: TextOverflow.ellipsis),
             onTap: () => _applyMention(m),
           );
         },

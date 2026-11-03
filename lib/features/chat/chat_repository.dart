@@ -103,6 +103,25 @@ class ChatRepository {
         (res.data['data'] as Map).cast<String, dynamic>());
   }
 
+  // ---- Reactions / message actions ----
+
+  /// POST /pulse/messages/{id}/reactions { emoji } — add a reaction (idempotent).
+  Future<void> addReaction(int messageId, String emoji) async {
+    await _dio.post('/pulse/messages/$messageId/reactions',
+        data: {'emoji': emoji});
+  }
+
+  /// DELETE /pulse/messages/{id}/reactions/{emoji} — remove my reaction.
+  Future<void> removeReaction(int messageId, String emoji) async {
+    await _dio.delete(
+        '/pulse/messages/$messageId/reactions/${Uri.encodeComponent(emoji)}');
+  }
+
+  /// DELETE /pulse/messages/{id} — delete a message (author / permitted only).
+  Future<void> deleteMessage(int messageId) async {
+    await _dio.delete('/pulse/messages/$messageId');
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.
