@@ -1,0 +1,35 @@
+name: macOS build
+
+# Builds the Pulse macOS .app on a free GitHub-hosted Mac runner and uploads it
+# as a downloadable artifact (no local Mac needed). Run it from the Actions tab
+# ("Run workflow"), or it runs on every push to main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      - run: flutter config --enable-macos-desktop
+      - run: flutter pub get
+      - run: flutter build macos --release
+
+      # Zip the .app bundle (-y keeps the internal symlinks a .app needs).
+      - name: Package the app
+        run: |
+          cd build/macos/Build/Products/Release
+          zip -r -y pulse_app-macos.zip pulse_app.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulse-macos-app
+          path: build/macos/Build/Products/Release/pulse_app-macos.zip
