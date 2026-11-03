@@ -131,6 +131,13 @@ class ChatRepository {
         (res.data['data'] as Map).cast<String, dynamic>());
   }
 
+  /// POST /pulse/channels/{id}/read { last_read_message_id } — clears unread up
+  /// to that message (monotonic; never moves the pointer back). Works for DMs.
+  Future<void> markRead(int channelId, int lastReadMessageId) async {
+    await _dio.post('/pulse/channels/$channelId/read',
+        data: {'last_read_message_id': lastReadMessageId});
+  }
+
   // ---- Threads ----
 
   /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }

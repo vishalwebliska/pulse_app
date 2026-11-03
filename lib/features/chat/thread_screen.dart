@@ -188,7 +188,6 @@ class _ThreadScreenState extends State<ThreadScreen> {
   /// Renders the message body with @mentions highlighted.
   Widget _body(String body) {
     final cs = Theme.of(context).colorScheme;
-    final base = DefaultTextStyle.of(context).style;
     final spans = <TextSpan>[];
     final re = RegExp(r'@[^\s@]+');
     var last = 0;
@@ -203,7 +202,9 @@ class _ThreadScreenState extends State<ThreadScreen> {
       last = match.end;
     }
     if (last < body.length) spans.add(TextSpan(text: body.substring(last)));
-    return RichText(text: TextSpan(style: base, children: spans));
+    // Text.rich inherits the ambient text style (fixes the "unstyled" red/
+    // yellow fallback that RichText shows without a resolved base style).
+    return Text.rich(TextSpan(children: spans));
   }
 
   Widget _buildComposer() {

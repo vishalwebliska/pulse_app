@@ -114,6 +114,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     );
     setState(() => _messages = [..._messages, msg]);
     _jumpToBottom();
+    _markRead();
   }
 
   Future<void> _load() async {
@@ -129,6 +130,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
         _loading = false;
       });
       _jumpToBottom();
+      _markRead();
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -137,6 +139,18 @@ class _ChannelScreenState extends State<ChannelScreen> {
             ? "You can't view this conversation."
             : "Couldn't load messages.";
       });
+    }
+  }
+
+  /// Mark this conversation read up to the newest message (clears the unread
+  /// badge). Best-effort; works for channels and DMs.
+  Future<void> _markRead() async {
+    if (_messages.isEmpty) return;
+    try {
+      await ChatRepository.instance
+          .markRead(widget.channelId, _messages.last.id);
+    } on DioException {
+      // Best-effort; the badge will clear on the next successful read.
     }
   }
 
@@ -605,7 +619,6 @@ class _ChannelScreenState extends State<ChannelScreen> {
   /// Renders the message body with @mentions highlighted.
   Widget _body(String body) {
     final cs = Theme.of(context).colorScheme;
-    final base = DefaultTextStyle.of(context).style;
     final spans = <TextSpan>[];
     final re = RegExp(r'@[^\s@]+');
     var last = 0;
@@ -620,7 +633,9 @@ class _ChannelScreenState extends State<ChannelScreen> {
       last = match.end;
     }
     if (last < body.length) spans.add(TextSpan(text: body.substring(last)));
-    return RichText(text: TextSpan(style: base, children: spans));
+    // Text.rich inherits the ambient text style (fixes the "unstyled" red/
+    // yellow fallback that RichText shows without a resolved base style).
+    return Text.rich(TextSpan(children: spans));
   }
 
   Widget _buildMentionBar() {
