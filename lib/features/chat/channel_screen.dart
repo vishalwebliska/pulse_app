@@ -8,6 +8,7 @@ import '../../core/realtime.dart';
 import '../../core/token_store.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'forward_screen.dart';
 import 'pinned_screen.dart';
 import 'search_screen.dart';
 import 'thread_screen.dart';
@@ -287,6 +288,14 @@ class _ChannelScreenState extends State<ChannelScreen> {
               onTap: () {
                 Navigator.pop(ctx);
                 _toggleSave(m);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.forward),
+              title: const Text('Forward'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _forwardMessage(m);
               },
             ),
             if (_userId != null && m.userId == _userId)
@@ -708,6 +717,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
         const SnackBar(content: Text("Couldn't update saved.")),
       );
     }
+  }
+
+  void _forwardMessage(PulseMessage m) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ForwardScreen(messageId: m.id, preview: m.body),
+    ));
   }
 
   void _openPins() {

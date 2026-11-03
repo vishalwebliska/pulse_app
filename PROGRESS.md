@@ -23,13 +23,14 @@ _Last updated: 2026-11-03_
 - **Pins** — pin/unpin a message (long-press), a 📌 indicator on pinned messages, and a per-conversation **Pinned** view (`POST`/`DELETE /messages/{id}/pin`, `GET /channels/{id}/pins`).
 - **Saved messages** — bookmark any message (long-press → Save); view all of them in **Me → Saved messages** (`POST`/`DELETE /messages/{id}/save`, `GET /saved-messages`).
 - **Typing indicators** — live "X is typing…" while others type (throttled `POST /pulse/typing/{id}` → `member.typing` over Reverb; 5s expiry).
+- **Forward** — forward any message to another channel/DM with an optional note (`POST /messages/{id}/forward`).
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
 ## 🔨 In progress
 - _(nothing active — next slice TBD)_
 
 ## 📋 Left / planned
-- Presence heartbeat / online dots on the DM + channel lists (directory already returns `online`).
+- Presence online dots — needs joining the Reverb **presence channel**; HTTP `/presence/ping` alone does NOT drive the `online` flag (verified 2026-11-03).
 - Read-state / unread sync.
 - Push notifications (Firebase/FCM) — needs device-token wiring (B5).
 - Meetings tab (LiveKit/Google Meet) — needs backend B4.

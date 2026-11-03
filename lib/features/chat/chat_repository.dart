@@ -144,6 +144,17 @@ class ChatRepository {
     await _dio.post('/pulse/typing/$channelId');
   }
 
+  /// POST /pulse/messages/{id}/forward { channel_id, comment? } — re-posts into
+  /// the target channel with a "Forwarded from …" quote.
+  Future<void> forwardMessage(int messageId, int channelId,
+      {String? comment}) async {
+    final data = <String, dynamic>{'channel_id': channelId};
+    if (comment != null && comment.trim().isNotEmpty) {
+      data['comment'] = comment.trim();
+    }
+    await _dio.post('/pulse/messages/$messageId/forward', data: data);
+  }
+
   // ---- Threads ----
 
   /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }
