@@ -44,6 +44,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
   int? _userId;
   PulseRealtime? _realtime;
   StreamSubscription<Map<String, dynamic>>? _rtSub;
+  StreamSubscription<Map<String, dynamic>>? _typingSub;
+
+  // Typing indicators (userId -> expiry).
+  final Map<int, DateTime> _typingUsers = {};
+  DateTime? _lastTypingPing;
+  Timer? _typingCleanup;
 
   // @-mention autocomplete
   List<PulseMember> _members = [];
@@ -66,6 +72,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
   void dispose() {
     _composer.removeListener(_onComposerChanged);
     _rtSub?.cancel();
+    _typingSub?.cancel();
+    _typingCleanup?.cancel();
     _realtime?.dispose();
     _composer.dispose();
     _scroll.dispose();
@@ -84,6 +92,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     _realtime = rt;
     rt.connect();
     _rtSub = rt.onMessage.listen(_onLiveMessage);
+    _typingSub = rt.onTyping.listen(_onTyping);
   }
 
   Future<void> _loadMembers() async {
@@ -116,6 +125,48 @@ class _ChannelScreenState extends State<ChannelScreen> {
     setState(() => _messages = [..._messages, msg]);
     _jumpToBottom();
     _markRead();
+  }
+
+  void _onTyping(Map<String, dynamic> p) {
+    if (!mounted) return;
+    if ((p['channel_id'] as int?) != widget.channelId) return;
+    if (p['parent_message_id'] != null) return; // thread typing, not here
+    final uid = p['user_id'] as int?;
+    if (uid == null || uid == _userId) return;
+    final exp = p['expires_at'] != null
+        ? DateTime.tryParse(p['expires_at'] as String)
+        : null;
+    if (exp == null) return;
+    setState(() => _typingUsers[uid] = exp);
+    _scheduleTypingCleanup();
+  }
+
+  void _scheduleTypingCleanup() {
+    _typingCleanup ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      final now = DateTime.now();
+      final before = _typingUsers.length;
+      _typingUsers.removeWhere((_, exp) => exp.isBefore(now));
+      if (mounted && _typingUsers.length != before) setState(() {});
+      if (_typingUsers.isEmpty) {
+        _typingCleanup?.cancel();
+        _typingCleanup = null;
+      }
+    });
+  }
+
+  Future<void> _pingTyping() async {
+    if (_composer.text.trim().isEmpty) return;
+    final now = DateTime.now();
+    if (_lastTypingPing != null &&
+        now.difference(_lastTypingPing!).inSeconds < 3) {
+      return;
+    }
+    _lastTypingPing = now;
+    try {
+      await ChatRepository.instance.sendTyping(widget.channelId);
+    } on DioException {
+      // best-effort
+    }
   }
 
   Future<void> _load() async {
@@ -386,6 +437,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   // ---- @-mention autocomplete ----
 
   void _onComposerChanged() {
+    _pingTyping();
     final sel = _composer.selection;
     final text = _composer.text;
     if (!sel.isValid || sel.start != sel.end) {
@@ -487,6 +539,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       body: Column(
         children: [
           Expanded(child: _buildList()),
+          _buildTypingIndicator(),
           if (_mentionSuggestions.isNotEmpty) _buildMentionBar(),
           const Divider(height: 1),
           _buildComposer(),
@@ -737,6 +790,33 @@ class _ChannelScreenState extends State<ChannelScreen> {
     return Text.rich(
       TextSpan(children: spans),
       style: Theme.of(context).textTheme.bodyMedium,
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    if (_typingUsers.isEmpty) return const SizedBox.shrink();
+    final names = _typingUsers.keys.map((uid) {
+      final match = _members.where((x) => x.userId == uid);
+      final name = match.isNotEmpty ? match.first.name : 'Someone';
+      return name.split(' ').first;
+    }).toList();
+    final String text;
+    if (names.length == 1) {
+      text = '${names.first} is typing…';
+    } else if (names.length == 2) {
+      text = '${names[0]} and ${names[1]} are typing…';
+    } else {
+      text = 'Several people are typing…';
+    }
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text,
+            style: TextStyle(
+                color: cs.outline, fontSize: 12, fontStyle: FontStyle.italic)),
+      ),
     );
   }
 

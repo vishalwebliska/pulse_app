@@ -23,9 +23,13 @@ class PulseRealtime {
   bool _closed = false;
 
   final _messages = StreamController<Map<String, dynamic>>.broadcast();
+  final _typing = StreamController<Map<String, dynamic>>.broadcast();
 
   /// Parsed `message.sent` payloads (channel_id, message_id, user_name, body, …).
   Stream<Map<String, dynamic>> get onMessage => _messages.stream;
+
+  /// Parsed `member.typing` payloads (channel_id, user_id, parent_message_id, expires_at).
+  Stream<Map<String, dynamic>> get onTyping => _typing.stream;
 
   String get _channel => 'private-pulse.workspace.$tenantId';
 
@@ -66,6 +70,13 @@ class PulseRealtime {
           _messages.add(payload.cast<String, dynamic>());
         }
         break;
+      case 'member.typing':
+        final tData = frame['data'];
+        final tPayload = tData is String ? jsonDecode(tData) : tData;
+        if (tPayload is Map) {
+          _typing.add(tPayload.cast<String, dynamic>());
+        }
+        break;
       default:
         break; // subscription_succeeded, errors, etc.
     }
@@ -102,5 +113,6 @@ class PulseRealtime {
       _ws?.sink.close();
     } catch (_) {}
     _messages.close();
+    _typing.close();
   }
 }

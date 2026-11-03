@@ -138,6 +138,12 @@ class ChatRepository {
         data: {'last_read_message_id': lastReadMessageId});
   }
 
+  /// POST /pulse/typing/{channel} — ping that the current user is typing
+  /// (server broadcasts `member.typing`; 5s expiry, ping every ~3s).
+  Future<void> sendTyping(int channelId) async {
+    await _dio.post('/pulse/typing/$channelId');
+  }
+
   // ---- Threads ----
 
   /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }
