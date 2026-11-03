@@ -263,6 +263,31 @@ class Mention {
       );
 }
 
+/// A member of a channel from `GET /pulse/channels/{id}/members`.
+class ChannelMemberRow {
+  const ChannelMemberRow({
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.role,
+  });
+
+  final int userId;
+  final String name;
+  final String email;
+  final String role;
+
+  factory ChannelMemberRow.fromJson(Map<String, dynamic> j) {
+    final u = j['user'];
+    return ChannelMemberRow(
+      userId: (u is Map ? u['id'] as int? : null) ?? 0,
+      name: (u is Map ? (u['name'] ?? '') : '') as String,
+      email: (u is Map ? (u['email'] ?? '') : '') as String,
+      role: (j['role'] ?? 'member') as String,
+    );
+  }
+}
+
 /// A workspace member from `GET /pulse/members/directory` — used by the
 /// people-search picker and the @-mention autocomplete.
 class PulseMember {

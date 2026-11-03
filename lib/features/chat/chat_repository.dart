@@ -42,6 +42,34 @@ class ChatRepository {
     return channel;
   }
 
+  /// GET /pulse/channels/{id} → channel details (with members_count).
+  Future<PulseChannel> channelInfo(int channelId) async {
+    final res = await _dio.get('/pulse/channels/$channelId');
+    return PulseChannel.fromJson(
+        (res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  /// GET /pulse/channels/{id}/members → [{ user:{id,name,email}, role }].
+  Future<List<ChannelMemberRow>> channelMembers(int channelId) async {
+    final res = await _dio.get('/pulse/channels/$channelId/members');
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) =>
+            ChannelMemberRow.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// POST /pulse/channels/{id}/members { user_ids } — add members.
+  Future<void> addChannelMembers(int channelId, List<int> userIds) async {
+    await _dio
+        .post('/pulse/channels/$channelId/members', data: {'user_ids': userIds});
+  }
+
+  /// POST /pulse/channels/{id}/leave — leave a channel.
+  Future<void> leaveChannel(int channelId) async {
+    await _dio.post('/pulse/channels/$channelId/leave');
+  }
+
   // ---- Direct messages ----
 
   /// GET /pulse/dms → { data: [ channel w/ display_name ] }

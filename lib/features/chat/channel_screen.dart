@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/realtime.dart';
 import '../../core/token_store.dart';
+import 'channel_details_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'forward_screen.dart';
@@ -523,14 +524,19 @@ class _ChannelScreenState extends State<ChannelScreen> {
         : (widget.kind == 'private' ? Icons.lock_outline : Icons.tag);
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(leadingIcon, size: 18),
-            const SizedBox(width: 6),
-            Flexible(
-                child: Text(widget.channelName, overflow: TextOverflow.ellipsis)),
-          ],
+        title: InkWell(
+          onTap: widget.isDm ? null : _openDetails,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(leadingIcon, size: 18),
+              const SizedBox(width: 6),
+              Flexible(
+                  child: Text(widget.channelName,
+                      overflow: TextOverflow.ellipsis)),
+              if (!widget.isDm) const Icon(Icons.expand_more, size: 18),
+            ],
+          ),
         ),
         actions: [
           IconButton(
@@ -732,6 +738,18 @@ class _ChannelScreenState extends State<ChannelScreen> {
         channelName: widget.channelName,
       ),
     ));
+  }
+
+  void _openDetails() {
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => ChannelDetailsScreen(
+            channelId: widget.channelId,
+            channelName: widget.channelName,
+            kind: widget.kind,
+          ),
+        ))
+        .then((_) => _load());
   }
 
   void _openChannelSearch() {

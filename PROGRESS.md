@@ -24,6 +24,7 @@ _Last updated: 2026-11-03_
 - **Saved messages** — bookmark any message (long-press → Save); view all of them in **Me → Saved messages** (`POST`/`DELETE /messages/{id}/save`, `GET /saved-messages`).
 - **Typing indicators** — live "X is typing…" while others type (throttled `POST /pulse/typing/{id}` → `member.typing` over Reverb; 5s expiry).
 - **Forward** — forward any message to another channel/DM with an optional note (`POST /messages/{id}/forward`).
+- **Channel details** — tap a channel's name → topic, member list + roles, **Add people** (private), and **Leave channel** (`GET /channels/{id}`, `GET`/`POST /channels/{id}/members`, `POST /channels/{id}/leave`).
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
 ## 🔨 In progress
