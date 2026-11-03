@@ -97,6 +97,7 @@ class PulseMessage {
     this.reactions = const [],
     this.replyCount = 0,
     this.editedAt,
+    this.isPinned = false,
   });
 
   final int id;
@@ -109,11 +110,13 @@ class PulseMessage {
   final List<MessageReaction> reactions;
   final int replyCount;
   final DateTime? editedAt;
+  final bool isPinned;
 
   PulseMessage copyWith({
     List<MessageReaction>? reactions,
     String? body,
     DateTime? editedAt,
+    bool? isPinned,
   }) =>
       PulseMessage(
         id: id,
@@ -126,6 +129,7 @@ class PulseMessage {
         reactions: reactions ?? this.reactions,
         replyCount: replyCount,
         editedAt: editedAt ?? this.editedAt,
+        isPinned: isPinned ?? this.isPinned,
       );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {
@@ -153,6 +157,7 @@ class PulseMessage {
       editedAt: j['edited_at'] != null
           ? DateTime.tryParse(j['edited_at'] as String)
           : null,
+      isPinned: (j['is_pinned'] ?? false) as bool,
     );
   }
 }

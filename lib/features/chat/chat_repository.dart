@@ -194,6 +194,30 @@ class ChatRepository {
     await _dio.patch('/pulse/mentions/$mentionId/read');
   }
 
+  // ---- Pins ----
+
+  /// GET /pulse/channels/{id}/pins → { data: [ { message: {...} } ] }.
+  Future<List<PulseMessage>> pins(int channelId) async {
+    final res = await _dio.get('/pulse/channels/$channelId/pins');
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .whereType<Map>()
+        .where((e) => e['message'] is Map)
+        .map((e) => PulseMessage.fromJson(
+            (e['message'] as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// POST /pulse/messages/{id}/pin — pin a message.
+  Future<void> pinMessage(int messageId) async {
+    await _dio.post('/pulse/messages/$messageId/pin');
+  }
+
+  /// DELETE /pulse/messages/{id}/pin — unpin a message.
+  Future<void> unpinMessage(int messageId) async {
+    await _dio.delete('/pulse/messages/$messageId/pin');
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.

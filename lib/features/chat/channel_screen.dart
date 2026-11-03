@@ -8,6 +8,7 @@ import '../../core/realtime.dart';
 import '../../core/token_store.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'pinned_screen.dart';
 import 'search_screen.dart';
 import 'thread_screen.dart';
 
@@ -217,6 +218,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
               onTap: () {
                 Navigator.pop(ctx);
                 _openThread(m);
+              },
+            ),
+            ListTile(
+              leading:
+                  Icon(m.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(m.isPinned ? 'Unpin message' : 'Pin message'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePin(m);
               },
             ),
             if (_userId != null && m.userId == _userId)
@@ -454,6 +464,11 @@ class _ChannelScreenState extends State<ChannelScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Pinned messages',
+            onPressed: _openPins,
+            icon: const Icon(Icons.push_pin_outlined),
+          ),
+          IconButton(
             tooltip: 'Search this conversation',
             onPressed: _openChannelSearch,
             icon: const Icon(Icons.search),
@@ -515,6 +530,10 @@ class _ChannelScreenState extends State<ChannelScreen> {
                           fontSize: 11,
                           fontStyle: FontStyle.italic)),
                 ],
+                if (m.isPinned) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.push_pin, size: 12, color: cs.outline),
+                ],
               ],
             ),
             const SizedBox(height: 2),
@@ -565,6 +584,44 @@ class _ChannelScreenState extends State<ChannelScreen> {
           ),
         ))
         .then((_) => _load());
+  }
+
+  Future<void> _togglePin(PulseMessage m) async {
+    final idx = _messages.indexWhere((x) => x.id == m.id);
+    final wasPinned = m.isPinned;
+    if (idx >= 0) {
+      setState(() {
+        _messages[idx] = _messages[idx].copyWith(isPinned: !wasPinned);
+        _messages = [..._messages];
+      });
+    }
+    try {
+      if (wasPinned) {
+        await ChatRepository.instance.unpinMessage(m.id);
+      } else {
+        await ChatRepository.instance.pinMessage(m.id);
+      }
+    } on DioException {
+      if (!mounted) return;
+      if (idx >= 0) {
+        setState(() {
+          _messages[idx] = _messages[idx].copyWith(isPinned: wasPinned);
+          _messages = [..._messages];
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't update the pin.")),
+      );
+    }
+  }
+
+  void _openPins() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PinnedScreen(
+        channelId: widget.channelId,
+        channelName: widget.channelName,
+      ),
+    ));
   }
 
   void _openChannelSearch() {
