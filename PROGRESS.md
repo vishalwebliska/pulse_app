@@ -13,7 +13,7 @@ _Last updated: 2026-11-03_
 - **@mentions** — composer autocomplete (collapsed-name token) + mention highlighting.
 - **Live messages** — Reverb realtime (`message.sent`) + token-aware broadcasting auth (B3).
 - **Reactions** — long-press emoji react; reaction chips with counts; tap to toggle.
-- **Message actions** — long-press → Copy text, Delete (your own).
+- **Message actions** — long-press → Copy, Edit (10-min window; shows an "(edited)" marker), or Delete (your own).
 - **Threads / replies** — "N replies" indicator + thread view (root + replies + composer).
 - **Message search** — scoped (in-channel, always available) + global (workspace-wide, plan-gated → shows upgrade notice on 402). Entry: Chat-tab search icon (global) + each channel's search button (scoped).
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
@@ -23,7 +23,6 @@ _Last updated: 2026-11-03_
 
 ## 📋 Left / planned
 - Mentions / activity inbox (`GET /pulse/mentions`).
-- Edit your own message (`PATCH /messages/{id}`, 10-min window).
 - Pins + saved messages.
 - Typing indicators / presence (online dots are already in the directory).
 - Read-state / unread sync.
@@ -33,7 +32,7 @@ _Last updated: 2026-11-03_
 ## Environment / deploy
 - App config (`lib/core/config.dart`) defaults to **prod** (`https://flaxxa.com`); `--dart-define=PULSE_ENV=local` points at `http://localhost:8000` + local Reverb for dev.
 - Builds: Android (`flutter build apk --release --split-per-abi`), Windows (`flutter build windows --release`), macOS via GitHub Actions CI on push.
-- **Pending (backend, user's git/deploy):** deploy mobile-auth **B1/B2/B3** to prod (`vishal → staging → main` + `route:clear && route:cache`). Until then, prod builds reach the login screen but can't sign in; test locally against `:8000`.
+- **Backend mobile-auth B1/B2/B3: DEPLOYED to prod ✅ (2026-11-03)** — `flaxxa.com/api/v1/auth/mobile/*` live (login 422 on empty body, broadcasting/auth 401); real flaxxa.com users sign in on the prod apps. Prod Reverb + Pulse chat API already live.
 
 ## Test accounts (local dev DB)
 - `pulse.tester@flaxxa.test` / `PulseTest@2026` (user 26919)

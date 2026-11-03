@@ -205,6 +205,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
                 _openThread(m);
               },
             ),
+            if (_userId != null && m.userId == _userId)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit message'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editMessage(m);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.copy),
               title: const Text('Copy text'),
@@ -289,6 +298,55 @@ class _ChannelScreenState extends State<ChannelScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Couldn't delete the message.")),
       );
+    }
+  }
+
+  Future<void> _editMessage(PulseMessage m) async {
+    final ctrl = TextEditingController(text: m.body);
+    final newBody = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit message'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 6,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (!mounted || newBody == null || newBody.isEmpty || newBody == m.body) {
+      return;
+    }
+    try {
+      final updated = await ChatRepository.instance.editMessage(m.id, newBody);
+      if (!mounted) return;
+      final idx = _messages.indexWhere((x) => x.id == m.id);
+      if (idx < 0) return;
+      setState(() {
+        _messages[idx] = _messages[idx].copyWith(
+          body: updated.body,
+          editedAt: updated.editedAt ?? DateTime.now(),
+        );
+        _messages = [..._messages];
+      });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final code = e.response?.statusCode;
+      final msg = (code == 422 || code == 403)
+          ? 'You can only edit your own recent messages.'
+          : "Couldn't edit the message.";
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -435,6 +493,14 @@ class _ChannelScreenState extends State<ChannelScreen> {
                 if (m.createdAt != null)
                   Text(_time(m.createdAt!),
                       style: TextStyle(color: cs.outline, fontSize: 11)),
+                if (m.editedAt != null) ...[
+                  const SizedBox(width: 6),
+                  Text('(edited)',
+                      style: TextStyle(
+                          color: cs.outline,
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic)),
+                ],
               ],
             ),
             const SizedBox(height: 2),

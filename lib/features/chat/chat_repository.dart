@@ -122,6 +122,15 @@ class ChatRepository {
     await _dio.delete('/pulse/messages/$messageId');
   }
 
+  /// PATCH /pulse/messages/{id} { body } → 200 { data: message }.
+  /// Author only, within a 10-minute edit window; re-parses mentions.
+  Future<PulseMessage> editMessage(int messageId, String body) async {
+    final res =
+        await _dio.patch('/pulse/messages/$messageId', data: {'body': body});
+    return PulseMessage.fromJson(
+        (res.data['data'] as Map).cast<String, dynamic>());
+  }
+
   // ---- Threads ----
 
   /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }

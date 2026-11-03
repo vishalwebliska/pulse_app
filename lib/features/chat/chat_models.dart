@@ -72,6 +72,7 @@ class PulseMessage {
     this.createdAt,
     this.reactions = const [],
     this.replyCount = 0,
+    this.editedAt,
   });
 
   final int id;
@@ -83,17 +84,24 @@ class PulseMessage {
   final DateTime? createdAt;
   final List<MessageReaction> reactions;
   final int replyCount;
+  final DateTime? editedAt;
 
-  PulseMessage copyWith({List<MessageReaction>? reactions}) => PulseMessage(
+  PulseMessage copyWith({
+    List<MessageReaction>? reactions,
+    String? body,
+    DateTime? editedAt,
+  }) =>
+      PulseMessage(
         id: id,
         userId: userId,
-        body: body,
+        body: body ?? this.body,
         bodyRendered: bodyRendered,
         kind: kind,
         authorName: authorName,
         createdAt: createdAt,
         reactions: reactions ?? this.reactions,
         replyCount: replyCount,
+        editedAt: editedAt ?? this.editedAt,
       );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {
@@ -118,6 +126,9 @@ class PulseMessage {
               .toList()
           : const [],
       replyCount: (j['reply_count'] ?? 0) as int,
+      editedAt: j['edited_at'] != null
+          ? DateTime.tryParse(j['edited_at'] as String)
+          : null,
     );
   }
 }
