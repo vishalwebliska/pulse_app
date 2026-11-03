@@ -229,6 +229,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
                 _togglePin(m);
               },
             ),
+            ListTile(
+              leading:
+                  Icon(m.isSaved ? Icons.bookmark : Icons.bookmark_border),
+              title: Text(m.isSaved ? 'Remove from saved' : 'Save message'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _toggleSave(m);
+              },
+            ),
             if (_userId != null && m.userId == _userId)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
@@ -611,6 +620,39 @@ class _ChannelScreenState extends State<ChannelScreen> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Couldn't update the pin.")),
+      );
+    }
+  }
+
+  Future<void> _toggleSave(PulseMessage m) async {
+    final idx = _messages.indexWhere((x) => x.id == m.id);
+    final wasSaved = m.isSaved;
+    if (idx >= 0) {
+      setState(() {
+        _messages[idx] = _messages[idx].copyWith(isSaved: !wasSaved);
+        _messages = [..._messages];
+      });
+    }
+    try {
+      if (wasSaved) {
+        await ChatRepository.instance.unsaveMessage(m.id);
+      } else {
+        await ChatRepository.instance.saveMessage(m.id);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(wasSaved ? 'Removed from saved' : 'Saved')),
+      );
+    } on DioException {
+      if (!mounted) return;
+      if (idx >= 0) {
+        setState(() {
+          _messages[idx] = _messages[idx].copyWith(isSaved: wasSaved);
+          _messages = [..._messages];
+        });
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't update saved.")),
       );
     }
   }

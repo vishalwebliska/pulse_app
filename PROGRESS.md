@@ -21,13 +21,13 @@ _Last updated: 2026-11-03_
 - **Read state** — opening a conversation marks it read (`POST /channels/{id}/read`), clearing the unread badge (channels + DMs).
 - **Activity inbox** — an **Activity** tab listing every @mention (unread/all toggle); tap to open the conversation + mark it read (`GET /pulse/mentions`, `PATCH /mentions/{id}/read`).
 - **Pins** — pin/unpin a message (long-press), a 📌 indicator on pinned messages, and a per-conversation **Pinned** view (`POST`/`DELETE /messages/{id}/pin`, `GET /channels/{id}/pins`).
+- **Saved messages** — bookmark any message (long-press → Save); view all of them in **Me → Saved messages** (`POST`/`DELETE /messages/{id}/save`, `GET /saved-messages`).
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
 ## 🔨 In progress
 - _(nothing active — next slice TBD)_
 
 ## 📋 Left / planned
-- Saved messages (bookmarks).
 - Typing indicators / presence (online dots are already in the directory).
 - Read-state / unread sync.
 - Push notifications (Firebase/FCM) — needs device-token wiring (B5).

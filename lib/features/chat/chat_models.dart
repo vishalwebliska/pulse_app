@@ -98,6 +98,7 @@ class PulseMessage {
     this.replyCount = 0,
     this.editedAt,
     this.isPinned = false,
+    this.isSaved = false,
   });
 
   final int id;
@@ -111,12 +112,14 @@ class PulseMessage {
   final int replyCount;
   final DateTime? editedAt;
   final bool isPinned;
+  final bool isSaved;
 
   PulseMessage copyWith({
     List<MessageReaction>? reactions,
     String? body,
     DateTime? editedAt,
     bool? isPinned,
+    bool? isSaved,
   }) =>
       PulseMessage(
         id: id,
@@ -130,6 +133,7 @@ class PulseMessage {
         replyCount: replyCount,
         editedAt: editedAt ?? this.editedAt,
         isPinned: isPinned ?? this.isPinned,
+        isSaved: isSaved ?? this.isSaved,
       );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {
@@ -158,8 +162,27 @@ class PulseMessage {
           ? DateTime.tryParse(j['edited_at'] as String)
           : null,
       isPinned: (j['is_pinned'] ?? false) as bool,
+      isSaved: (j['is_saved'] ?? false) as bool,
     );
   }
+}
+
+/// A saved message ("bookmark") from `GET /pulse/saved-messages`, carrying its
+/// message and the channel it lives in (so it can be opened).
+class SavedItem {
+  const SavedItem({
+    required this.message,
+    required this.channelId,
+    required this.channelName,
+    required this.channelKind,
+  });
+
+  final PulseMessage message;
+  final int channelId;
+  final String channelName;
+  final String channelKind;
+
+  bool get isDm => channelKind == 'dm' || channelKind == 'group_dm';
 }
 
 /// A message search hit from `GET /pulse/search` (carries its channel).

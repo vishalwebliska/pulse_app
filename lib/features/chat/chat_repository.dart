@@ -218,6 +218,35 @@ class ChatRepository {
     await _dio.delete('/pulse/messages/$messageId/pin');
   }
 
+  // ---- Saved messages ----
+
+  /// GET /pulse/saved-messages → { data: [ { message, channel } ] }.
+  Future<List<SavedItem>> savedMessages() async {
+    final res = await _dio.get('/pulse/saved-messages');
+    final list = (res.data['data'] as List? ?? []);
+    return list.whereType<Map>().where((e) => e['message'] is Map).map((e) {
+      final msg =
+          PulseMessage.fromJson((e['message'] as Map).cast<String, dynamic>());
+      final ch = e['channel'] is Map ? (e['channel'] as Map) : const {};
+      return SavedItem(
+        message: msg,
+        channelId: (ch['id'] ?? e['channel_id'] ?? 0) as int,
+        channelName: (ch['name'] ?? '') as String,
+        channelKind: (ch['kind'] ?? 'public') as String,
+      );
+    }).toList();
+  }
+
+  /// POST /pulse/messages/{id}/save — bookmark a message.
+  Future<void> saveMessage(int messageId) async {
+    await _dio.post('/pulse/messages/$messageId/save');
+  }
+
+  /// DELETE /pulse/messages/{id}/save — remove a bookmark.
+  Future<void> unsaveMessage(int messageId) async {
+    await _dio.delete('/pulse/messages/$messageId/save');
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.
