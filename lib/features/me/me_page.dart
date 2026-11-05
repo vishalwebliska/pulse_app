@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
+import '../chat/reminders_screen.dart';
 import '../chat/saved_screen.dart';
 
 class MePage extends ConsumerWidget {
@@ -51,6 +52,14 @@ class MePage extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SavedScreen())),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.schedule_outlined),
+            title: const Text('Reminders'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const RemindersScreen())),
           ),
           const Divider(height: 1),
           const SizedBox(height: 28),

@@ -231,6 +231,49 @@ class SavedItem {
   bool get isDm => channelKind == 'dm' || channelKind == 'group_dm';
 }
 
+/// A personal reminder from `GET /pulse/reminders` ("Remind me about this
+/// message"), carrying the message + the channel it lives in so it can be
+/// opened. Only active (not-yet-notified) reminders are returned.
+class PulseReminder {
+  const PulseReminder({
+    required this.id,
+    required this.messageId,
+    required this.messageBody,
+    required this.channelId,
+    required this.channelName,
+    required this.channelKind,
+    this.remindAt,
+  });
+
+  final int id;
+  final int messageId;
+  final String messageBody;
+  final int channelId;
+  final String channelName;
+  final String channelKind;
+  final DateTime? remindAt;
+
+  bool get isDm => channelKind == 'dm' || channelKind == 'group_dm';
+
+  factory PulseReminder.fromJson(Map<String, dynamic> j) {
+    final msg = j['message'];
+    final ch = j['channel'];
+    return PulseReminder(
+      id: j['id'] as int,
+      messageId: (msg is Map ? msg['id'] as int? : null) ?? 0,
+      messageBody: (msg is Map ? (msg['body'] ?? '') : '') as String,
+      channelId: (ch is Map ? ch['id'] as int? : null) ??
+          (msg is Map ? msg['channel_id'] as int? : null) ??
+          0,
+      channelName: (ch is Map ? (ch['name'] ?? '') : '') as String,
+      channelKind: (ch is Map ? (ch['kind'] ?? 'public') : 'public') as String,
+      remindAt: j['remind_at'] != null
+          ? DateTime.tryParse(j['remind_at'] as String)
+          : null,
+    );
+  }
+}
+
 /// A message search hit from `GET /pulse/search` (carries its channel).
 class SearchResult {
   const SearchResult({

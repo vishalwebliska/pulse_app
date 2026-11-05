@@ -16,6 +16,7 @@ import 'forward_screen.dart';
 import 'hover_actions.dart';
 import 'message_text.dart';
 import 'notifications_provider.dart';
+import 'reminder_helpers.dart';
 import '../meetings/meeting_helpers.dart';
 import 'pinned_screen.dart';
 import 'search_screen.dart';
@@ -469,6 +470,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
             m.isPinned ? 'Unpin message' : 'Pin message'),
         _menuItem('save', m.isSaved ? Icons.bookmark : Icons.bookmark_border,
             m.isSaved ? 'Remove from saved' : 'Save message'),
+        _menuItem('remind', Icons.schedule_outlined, 'Remind me'),
         _menuItem('forward', Icons.forward, 'Forward'),
         _menuItem('copy', Icons.copy, 'Copy text'),
         if (isOwn) _menuItem('edit', Icons.edit_outlined, 'Edit message'),
@@ -487,6 +489,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
         _togglePin(m);
       case 'save':
         _toggleSave(m);
+      case 'remind':
+        remindAboutMessage(context, m.id);
       case 'forward':
         _forwardMessage(m);
       case 'copy':

@@ -317,6 +317,31 @@ class ChatRepository {
     return data['join_url'] as String;
   }
 
+  // ---- Reminders ("Remind me about this message") ----
+
+  /// GET /pulse/reminders → { data: [...] } — active (not-yet-notified),
+  /// soonest first.
+  Future<List<PulseReminder>> reminders() async {
+    final res = await _dio.get('/pulse/reminders');
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) => PulseReminder.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// POST /pulse/messages/{id}/remind { preset } → 201. The time is resolved
+  /// server-side; presets: in_20_min | in_1_hour | in_3_hours | tomorrow |
+  /// next_week.
+  Future<void> remindMe(int messageId, String preset) async {
+    await _dio
+        .post('/pulse/messages/$messageId/remind', data: {'preset': preset});
+  }
+
+  /// DELETE /pulse/reminders/{id} — cancel a reminder.
+  Future<void> deleteReminder(int reminderId) async {
+    await _dio.delete('/pulse/reminders/$reminderId');
+  }
+
   // ---- Threads ----
 
   /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }
