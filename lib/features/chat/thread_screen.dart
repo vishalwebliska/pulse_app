@@ -8,6 +8,7 @@ import 'chat_repository.dart';
 import 'composer_toolbar.dart';
 import 'forward_screen.dart';
 import 'hover_actions.dart';
+import 'message_text.dart';
 
 /// A message thread: the root message + its replies, with a composer to reply.
 /// Opened from the "N replies" indicator or the message action sheet.
@@ -519,30 +520,8 @@ class _ThreadScreenState extends State<ThreadScreen> {
     }
   }
 
-  /// Renders the message body with @mentions highlighted.
-  Widget _body(String body) {
-    final cs = Theme.of(context).colorScheme;
-    final spans = <TextSpan>[];
-    final re = RegExp(r'@[^\s@]+');
-    var last = 0;
-    for (final match in re.allMatches(body)) {
-      if (match.start > last) {
-        spans.add(TextSpan(text: body.substring(last, match.start)));
-      }
-      spans.add(TextSpan(
-        text: match.group(0),
-        style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
-      ));
-      last = match.end;
-    }
-    if (last < body.length) spans.add(TextSpan(text: body.substring(last)));
-    // Explicit body style + Text.rich guarantees a resolved text style,
-    // avoiding Flutter's red/yellow "unstyled text" fallback.
-    return Text.rich(
-      TextSpan(children: spans),
-      style: Theme.of(context).textTheme.bodyMedium,
-    );
-  }
+  /// Renders the message body with inline Markdown + @mentions.
+  Widget _body(String body) => messageBody(context, body);
 
   Widget _buildComposer() {
     return SafeArea(

@@ -12,6 +12,7 @@ import 'chat_repository.dart';
 import 'composer_toolbar.dart';
 import 'forward_screen.dart';
 import 'hover_actions.dart';
+import 'message_text.dart';
 import 'pinned_screen.dart';
 import 'search_screen.dart';
 import 'thread_screen.dart';
@@ -1123,33 +1124,10 @@ class _ChannelScreenState extends State<ChannelScreen> {
     );
   }
 
-  /// Renders the message body with @mentions highlighted. [color] sets the base
-  /// text colour (white on own orange bubbles; null keeps the themed ink).
-  Widget _body(String body, {Color? color}) {
-    final cs = Theme.of(context).colorScheme;
-    final mentionColor = color ?? cs.primary;
-    final spans = <TextSpan>[];
-    final re = RegExp(r'@[^\s@]+');
-    var last = 0;
-    for (final match in re.allMatches(body)) {
-      if (match.start > last) {
-        spans.add(TextSpan(text: body.substring(last, match.start)));
-      }
-      spans.add(TextSpan(
-        text: match.group(0),
-        style: TextStyle(color: mentionColor, fontWeight: FontWeight.w600),
-      ));
-      last = match.end;
-    }
-    if (last < body.length) spans.add(TextSpan(text: body.substring(last)));
-    // Explicit body style + Text.rich guarantees a resolved text style,
-    // avoiding Flutter's red/yellow "unstyled text" fallback.
-    return Text.rich(
-      TextSpan(children: spans),
-      style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
-          .copyWith(color: color),
-    );
-  }
+  /// Renders the message body with inline Markdown + @mentions. [color] sets the
+  /// base text colour (white on own orange bubbles; null keeps the themed ink).
+  Widget _body(String body, {Color? color}) =>
+      messageBody(context, body, color: color);
 
   Widget _buildTypingIndicator() {
     if (_typingUsers.isEmpty) return const SizedBox.shrink();
