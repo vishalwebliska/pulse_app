@@ -88,6 +88,36 @@ class MessageReaction {
 /// Delivery state for a locally-composed message before the server confirms it.
 enum MessageSendState { sent, sending, failed }
 
+class PulseAttachment {
+  const PulseAttachment({
+    required this.id,
+    required this.name,
+    required this.mimeType,
+    required this.sizeBytes,
+  });
+
+  final int id;
+  final String name;
+  final String mimeType;
+  final int sizeBytes;
+
+  bool get isImage => mimeType.startsWith('image/');
+
+  String get sizeLabel {
+    final b = sizeBytes;
+    if (b < 1024) return '$b B';
+    if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)} KB';
+    return '${(b / 1024 / 1024).toStringAsFixed(1)} MB';
+  }
+
+  factory PulseAttachment.fromJson(Map<String, dynamic> j) => PulseAttachment(
+        id: j['id'] as int,
+        name: (j['original_name'] ?? 'file') as String,
+        mimeType: (j['mime_type'] ?? 'application/octet-stream') as String,
+        sizeBytes: (j['size_bytes'] ?? 0) as int,
+      );
+}
+
 class PulseMessage {
   PulseMessage({
     required this.id,
@@ -103,6 +133,7 @@ class PulseMessage {
     this.isPinned = false,
     this.isSaved = false,
     this.sendState = MessageSendState.sent,
+    this.attachments = const [],
   });
 
   final int id;
@@ -118,6 +149,7 @@ class PulseMessage {
   final bool isPinned;
   final bool isSaved;
   final MessageSendState sendState;
+  final List<PulseAttachment> attachments;
 
   PulseMessage copyWith({
     List<MessageReaction>? reactions,
@@ -141,6 +173,7 @@ class PulseMessage {
         isPinned: isPinned ?? this.isPinned,
         isSaved: isSaved ?? this.isSaved,
         sendState: sendState ?? this.sendState,
+        attachments: attachments,
       );
 
   factory PulseMessage.fromJson(Map<String, dynamic> j) {
@@ -170,6 +203,12 @@ class PulseMessage {
           : null,
       isPinned: (j['is_pinned'] ?? false) as bool,
       isSaved: (j['is_saved'] ?? false) as bool,
+      attachments: (j['attachments'] is List)
+          ? (j['attachments'] as List)
+              .whereType<Map>()
+              .map((e) => PulseAttachment.fromJson(e.cast<String, dynamic>()))
+              .toList()
+          : const [],
     );
   }
 }

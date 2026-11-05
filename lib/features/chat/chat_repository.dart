@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
+import '../../core/config.dart';
 import 'chat_models.dart';
 
 /// Thin wrapper over the `/api/v1/pulse/*` endpoints used by the chat features
@@ -111,10 +112,15 @@ class ChatRepository {
   }
 
   /// POST /pulse/channels/{id}/messages → 201 { data: { ...message } }.
-  Future<PulseMessage> send(int channelId, String body) async {
+  Future<PulseMessage> send(int channelId, String body,
+      {List<int> attachmentIds = const []}) async {
     final res = await _dio.post(
       '/pulse/channels/$channelId/messages',
-      data: {'body': body},
+      data: {
+        'body': body,
+        if (attachmentIds.isNotEmpty) 'attachment_ids': attachmentIds,
+        if (attachmentIds.isNotEmpty) 'has_attachments': true,
+      },
     );
     return PulseMessage.fromJson(
         (res.data['data'] as Map).cast<String, dynamic>());
@@ -122,13 +128,71 @@ class ChatRepository {
 
   /// POST /pulse/dms/{id}/messages → 201 { data: { ...message } }.
   /// DM channels use a dedicated send path.
-  Future<PulseMessage> sendDm(int channelId, String body) async {
+  Future<PulseMessage> sendDm(int channelId, String body,
+      {List<int> attachmentIds = const []}) async {
     final res = await _dio.post(
       '/pulse/dms/$channelId/messages',
-      data: {'body': body},
+      data: {
+        'body': body,
+        if (attachmentIds.isNotEmpty) 'attachment_ids': attachmentIds,
+        if (attachmentIds.isNotEmpty) 'has_attachments': true,
+      },
     );
     return PulseMessage.fromJson(
         (res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  // ---- Attachments ----
+
+  /// Two-step upload (sign → PUT bytes → finalize); returns the attachment id to
+  /// attach to a message. Mirrors the web composer flow.
+  Future<int> uploadAttachment({
+    required int channelId,
+    required String filename,
+    required String mimeType,
+    required List<int> bytes,
+  }) async {
+    final sign = await _dio.post('/pulse/attachments/sign-upload', data: {
+      'filename': filename,
+      'mime_type': mimeType,
+      'size_bytes': bytes.length,
+      'channel_id': channelId,
+    });
+    final d = (sign.data['data'] as Map).cast<String, dynamic>();
+    final attachmentId = d['attachment_id'] as int;
+    final uploadUrl = d['upload_url'] as String;
+    final headers = (d['headers'] as Map?)?.cast<String, dynamic>() ??
+        {'Content-Type': mimeType};
+    final opts = Options(
+      headers: {...headers, Headers.contentLengthHeader: bytes.length},
+    );
+    if (uploadUrl.startsWith('http')) {
+      // Prod: presigned object-storage PUT — no app auth/tenant headers.
+      await Dio().put(uploadUrl, data: Stream.value(bytes), options: opts);
+    } else {
+      // Local: our upload receiver. Strip the /api/v1 prefix the sign response
+      // includes, since _dio's baseUrl already carries it.
+      final path = uploadUrl.startsWith(AppConfig.apiPrefix)
+          ? uploadUrl.substring(AppConfig.apiPrefix.length)
+          : uploadUrl;
+      await _dio.put(path, data: Stream.value(bytes), options: opts);
+    }
+    await _dio.post('/pulse/attachments/finalize',
+        data: {'attachment_id': attachmentId});
+    return attachmentId;
+  }
+
+  /// Resolves an attachment to a directly-openable (presigned) URL. Returns null
+  /// when the backend streams the file instead of redirecting (local disk).
+  Future<String?> resolveAttachmentUrl(int attachmentId) async {
+    final res = await _dio.get(
+      '/pulse/attachments/$attachmentId/url',
+      options: Options(
+        followRedirects: false,
+        validateStatus: (s) => s != null && s < 400,
+      ),
+    );
+    return res.headers.value('location');
   }
 
   // ---- Reactions / message actions ----

@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/realtime.dart';
 import '../../core/token_store.dart';
@@ -46,6 +48,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   List<PulseMessage> _messages = [];
   bool _loading = true;
   int _nextTempId = -1;
+  final List<_Attachment> _pending = [];
   String? _error;
   int? _userId;
   PulseRealtime? _realtime;
@@ -228,14 +231,20 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   Future<void> _send() async {
     final text = _composer.text.trim();
-    if (text.isEmpty) return;
+    final ids = _pending
+        .where((a) => a.status == _UploadStatus.ready && a.id != null)
+        .map((a) => a.id!)
+        .toList();
+    if (text.isEmpty && ids.isEmpty) return;
     // Show the message right away with a "sending" state; the composer clears
     // immediately so it feels instant instead of waiting on the round-trip.
     final tempId = _nextTempId--;
     final optimistic = PulseMessage(
       id: tempId,
       userId: _userId,
-      body: text,
+      body: text.isNotEmpty
+          ? text
+          : '📎 ${ids.length} attachment${ids.length == 1 ? '' : 's'}',
       kind: 'user',
       authorName: 'You',
       createdAt: DateTime.now(),
@@ -244,17 +253,20 @@ class _ChannelScreenState extends State<ChannelScreen> {
     setState(() {
       _messages = [..._messages, optimistic];
       _composer.clear();
+      _pending.clear();
     });
     _clearMentions();
     _jumpToBottom();
-    await _deliver(tempId, text);
+    await _deliver(tempId, text, ids);
   }
 
-  Future<void> _deliver(int tempId, String text) async {
+  Future<void> _deliver(int tempId, String text, List<int> attachmentIds) async {
     try {
       final msg = widget.isDm
-          ? await ChatRepository.instance.sendDm(widget.channelId, text)
-          : await ChatRepository.instance.send(widget.channelId, text);
+          ? await ChatRepository.instance
+              .sendDm(widget.channelId, text, attachmentIds: attachmentIds)
+          : await ChatRepository.instance
+              .send(widget.channelId, text, attachmentIds: attachmentIds);
       if (!mounted) return;
       setState(() {
         final idx = _messages.indexWhere((m) => m.id == tempId);
@@ -290,7 +302,85 @@ class _ChannelScreenState extends State<ChannelScreen> {
       updated[idx] = updated[idx].copyWith(sendState: MessageSendState.sending);
       _messages = updated;
     });
-    await _deliver(failed.id, failed.body);
+    await _deliver(failed.id, failed.body, const []);
+  }
+
+  // ---- Attachments ----
+
+  Future<void> _pickFiles() async {
+    final List<XFile> files;
+    try {
+      files = await openFiles();
+    } catch (_) {
+      return;
+    }
+    for (final f in files) {
+      final bytes = await f.readAsBytes();
+      final att = _Attachment(name: f.name);
+      setState(() => _pending.add(att));
+      try {
+        final id = await ChatRepository.instance.uploadAttachment(
+          channelId: widget.channelId,
+          filename: f.name,
+          mimeType: _mimeFromName(f.name),
+          bytes: bytes,
+        );
+        if (!mounted) return;
+        setState(() {
+          att.id = id;
+          att.status = _UploadStatus.ready;
+        });
+      } on DioException catch (e) {
+        if (!mounted) return;
+        setState(() => att.status = _UploadStatus.error);
+        final msg = e.response?.statusCode == 402
+            ? "File uploads aren't included in your plan."
+            : 'Upload failed: ${f.name}';
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(msg)));
+      }
+    }
+  }
+
+  void _removePending(_Attachment a) {
+    setState(() => _pending.remove(a));
+  }
+
+  Future<void> _openAttachment(PulseAttachment a) async {
+    final url = await ChatRepository.instance.resolveAttachmentUrl(a.id);
+    if (!mounted) return;
+    final uri = url != null ? Uri.tryParse(url) : null;
+    if (uri == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Can't open this attachment here.")));
+      return;
+    }
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  String _mimeFromName(String name) {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    const map = {
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'heic': 'image/heic',
+      'pdf': 'application/pdf',
+      'doc': 'application/msword',
+      'docx':
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'txt': 'text/plain',
+      'csv': 'text/csv',
+      'zip': 'application/zip',
+      'mp4': 'video/mp4',
+      'mp3': 'audio/mpeg',
+    };
+    return map[ext] ?? 'application/octet-stream';
   }
 
   // ---- Reactions + message actions ----
@@ -842,6 +932,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
                     color: cs.onSurface)),
           ),
         bubble,
+        _attachmentChips(m),
         if (isOwn && m.sendState == MessageSendState.sending)
           _statusLabel('Sending…', cs.outline),
         if (isOwn && m.sendState == MessageSendState.failed)
@@ -1185,6 +1276,127 @@ class _ChannelScreenState extends State<ChannelScreen> {
     );
   }
 
+  Widget _buildPendingAttachments() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(bottom: 6, left: 2),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final a in _pending)
+            Container(
+              padding: const EdgeInsets.fromLTRB(8, 5, 4, 5),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (a.status == _UploadStatus.uploading)
+                    const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                  else if (a.status == _UploadStatus.error)
+                    Icon(Icons.error_outline, size: 14, color: cs.error)
+                  else
+                    Icon(Icons.check_circle, size: 14, color: cs.primary),
+                  const SizedBox(width: 6),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+                  InkWell(
+                    onTap: () => _removePending(a),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(Icons.close, size: 14, color: cs.outline),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _attachmentChips(PulseMessage m) {
+    if (m.attachments.isEmpty) return const SizedBox.shrink();
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final a in m.attachments)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: InkWell(
+                onTap: () => _openAttachment(a),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: cs.outlineVariant),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                            a.isImage
+                                ? Icons.image_outlined
+                                : Icons.insert_drive_file_outlined,
+                            size: 18,
+                            color: cs.primary),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(a.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600, fontSize: 12.5)),
+                            Text(a.sizeLabel,
+                                style:
+                                    TextStyle(color: cs.outline, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(Icons.open_in_new, size: 15, color: cs.outline),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildComposer() {
     final hint = widget.isDm
         ? 'Message ${widget.channelName}'
@@ -1196,10 +1408,16 @@ class _ChannelScreenState extends State<ChannelScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_pending.isNotEmpty) _buildPendingAttachments(),
             ComposerToolbar(controller: _composer, focusNode: _composerFocus),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                IconButton(
+                  tooltip: 'Attach a file',
+                  onPressed: _pickFiles,
+                  icon: const Icon(Icons.attach_file),
+                ),
                 Expanded(
                   child: TextField(
                     controller: _composer,
@@ -1241,4 +1459,14 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final ampm = l.hour >= 12 ? 'PM' : 'AM';
     return '$h:${l.minute.toString().padLeft(2, '0')} $ampm';
   }
+}
+
+enum _UploadStatus { uploading, ready, error }
+
+/// A file being uploaded from the composer before it's attached to a message.
+class _Attachment {
+  _Attachment({required this.name});
+  final String name;
+  int? id;
+  _UploadStatus status = _UploadStatus.uploading;
 }
