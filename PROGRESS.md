@@ -28,6 +28,7 @@ _Last updated: 2026-11-03_
 - **Activity inbox** — an **Activity** tab listing every @mention (unread/all toggle); tap to open the conversation + mark it read (`GET /pulse/mentions`, `PATCH /mentions/{id}/read`).
 - **Pins** — pin/unpin a message (long-press), a 📌 indicator on pinned messages, and a per-conversation **Pinned** view (`POST`/`DELETE /messages/{id}/pin`, `GET /channels/{id}/pins`).
 - **Saved messages** — bookmark any message (long-press → Save); view all of them in **Me → Saved messages** (`POST`/`DELETE /messages/{id}/save`, `GET /saved-messages`).
+- **Jump to latest** — a floating ↓ button appears when scrolled up in a conversation; tap to smooth-scroll back to the newest message.
 - **Drafts** — unsent composer text is saved per conversation (debounced `PUT /channels/{id}/draft`), restored on reopen (`GET /drafts`), and cleared on send — matching the web.
 - **Typing indicators** — live "X is typing…" while others type (throttled `POST /pulse/typing/{id}` → `member.typing` over Reverb; 5s expiry).
 - **Forward** — forward any message to another channel/DM with an optional note (`POST /messages/{id}/forward`).

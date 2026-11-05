@@ -52,6 +52,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   final List<_Attachment> _pending = [];
   final Map<int, Future<Uint8List>> _imgFutures = {};
   Timer? _draftTimer;
+  bool _showJump = false;
   String? _error;
   int? _userId;
   PulseRealtime? _realtime;
@@ -79,6 +80,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     _initRealtime();
     _loadMembers();
     _composer.addListener(_onComposerChanged);
+    _scroll.addListener(_onScroll);
   }
 
   @override
@@ -91,6 +93,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     _realtime?.dispose();
     _composer.dispose();
     _composerFocus.dispose();
+    _scroll.removeListener(_onScroll);
     _scroll.dispose();
     super.dispose();
   }
@@ -730,7 +733,15 @@ class _ChannelScreenState extends State<ChannelScreen> {
       ),
       body: Column(
         children: [
-          Expanded(child: _buildList()),
+          Expanded(
+            child: Stack(
+              children: [
+                _buildList(),
+                if (_showJump)
+                  Positioned(right: 14, bottom: 12, child: _jumpButton()),
+              ],
+            ),
+          ),
           _buildTypingIndicator(),
           if (_mentionSuggestions.isNotEmpty) _buildMentionBar(),
           const Divider(height: 1),
@@ -770,6 +781,42 @@ class _ChannelScreenState extends State<ChannelScreen> {
           children: [_daySeparator(m.createdAt), tile],
         );
       },
+    );
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final show =
+        _scroll.position.maxScrollExtent - _scroll.position.pixels > 400;
+    if (show != _showJump) setState(() => _showJump = show);
+  }
+
+  void _animateToBottom() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(_scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+
+  Widget _jumpButton() {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _animateToBottom,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: cs.outlineVariant),
+          ),
+          child: Icon(Icons.keyboard_arrow_down, color: cs.primary),
+        ),
+      ),
     );
   }
 
