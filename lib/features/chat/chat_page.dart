@@ -9,6 +9,7 @@ import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'new_group_screen.dart';
 import 'search_screen.dart';
+import 'unread_provider.dart';
 
 /// The Chat tab: the workspace's channels + direct messages. The app-bar title
 /// is a workspace switcher; a search button finds people (and starts a DM); a
@@ -49,6 +50,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         _dms = results[1];
         _loading = false;
       });
+      final total = [...results[0], ...results[1]]
+          .fold<int>(0, (sum, c) => sum + c.unreadCount);
+      ref.read(unreadTotalProvider.notifier).set(total);
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {

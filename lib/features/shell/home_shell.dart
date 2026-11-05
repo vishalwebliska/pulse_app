@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../activity/activity_page.dart';
 import '../chat/chat_page.dart';
+import '../chat/unread_provider.dart';
 import '../me/me_page.dart';
 import '../meetings/meetings_page.dart';
 
 /// App shell. On wide screens (desktop/tablet) a collapsible left sidebar
 /// (Teams/Slack style, Pulse colours); on phones the familiar bottom nav.
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
 class _NavItem {
@@ -23,7 +25,7 @@ class _NavItem {
 
 const Color _brand = Color(0xFFF97316);
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
   bool _expanded = false;
 
@@ -43,6 +45,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final unread = ref.watch(unreadTotalProvider);
     final wide = MediaQuery.sizeOf(context).width >= 640;
     if (!wide) {
       // Phones keep the bottom nav — a left rail there would be cramped.
@@ -52,11 +55,12 @@ class _HomeShellState extends State<HomeShell> {
           selectedIndex: _index,
           onDestinationSelected: (i) => setState(() => _index = i),
           destinations: [
-            for (final it in _items)
+            for (int i = 0; i < _items.length; i++)
               NavigationDestination(
-                icon: Icon(it.icon),
-                selectedIcon: Icon(it.selectedIcon),
-                label: it.label,
+                icon: _maybeBadge(i, Icon(_items[i].icon), unread),
+                selectedIcon:
+                    _maybeBadge(i, Icon(_items[i].selectedIcon), unread),
+                label: _items[i].label,
               ),
           ],
         ),
@@ -65,7 +69,7 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       body: Row(
         children: [
-          _sidebar(context),
+          _sidebar(context, unread),
           const VerticalDivider(width: 1),
           Expanded(child: IndexedStack(index: _index, children: _pages)),
         ],
@@ -73,7 +77,16 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  Widget _sidebar(BuildContext context) {
+  Widget _maybeBadge(int i, Widget child, int unread) {
+    if (i != 0 || unread <= 0) return child;
+    return Badge(
+      backgroundColor: _brand,
+      label: Text(unread > 99 ? '99+' : '$unread'),
+      child: child,
+    );
+  }
+
+  Widget _sidebar(BuildContext context, int unread) {
     final cs = Theme.of(context).colorScheme;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -118,7 +131,7 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
           const SizedBox(height: 4),
-          for (int i = 0; i < _items.length; i++) _navTile(context, i),
+          for (int i = 0; i < _items.length; i++) _navTile(context, i, unread),
           const Spacer(),
           const Divider(height: 1),
           const SizedBox(height: 6),
@@ -134,7 +147,7 @@ class _HomeShellState extends State<HomeShell> {
     );
   }
 
-  Widget _navTile(BuildContext context, int i) {
+  Widget _navTile(BuildContext context, int i, int unread) {
     final cs = Theme.of(context).colorScheme;
     final selected = _index == i;
     final it = _items[i];
@@ -151,8 +164,11 @@ class _HomeShellState extends State<HomeShell> {
             mainAxisAlignment:
                 _expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
             children: [
-              Icon(selected ? it.selectedIcon : it.icon,
-                  size: 22, color: selected ? _brand : cs.outline),
+              _maybeBadge(
+                  i,
+                  Icon(selected ? it.selectedIcon : it.icon,
+                      size: 22, color: selected ? _brand : cs.outline),
+                  unread),
               if (_expanded) ...[
                 const SizedBox(width: 14),
                 Expanded(
