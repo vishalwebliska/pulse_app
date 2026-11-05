@@ -51,6 +51,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   int _nextTempId = -1;
   final List<_Attachment> _pending = [];
   final Map<int, Future<Uint8List>> _imgFutures = {};
+  Timer? _draftTimer;
   String? _error;
   int? _userId;
   PulseRealtime? _realtime;
@@ -74,6 +75,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     super.initState();
     _loadUserId();
     _load();
+    _loadDraft();
     _initRealtime();
     _loadMembers();
     _composer.addListener(_onComposerChanged);
@@ -82,6 +84,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   @override
   void dispose() {
     _composer.removeListener(_onComposerChanged);
+    _draftTimer?.cancel();
     _rtSub?.cancel();
     _typingSub?.cancel();
     _typingCleanup?.cancel();
@@ -115,6 +118,30 @@ class _ChannelScreenState extends State<ChannelScreen> {
     } on DioException {
       // Mentions still type fine without the picker; ignore.
     }
+  }
+
+  Future<void> _loadDraft() async {
+    try {
+      final body = await ChatRepository.instance.loadDraft(widget.channelId);
+      if (!mounted || body == null || body.isEmpty) return;
+      if (_composer.text.isEmpty) _composer.text = body;
+    } on DioException {
+      // Drafts are best-effort.
+    }
+  }
+
+  void _scheduleDraftSave() {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 800), () async {
+      try {
+        final text = _composer.text;
+        if (text.trim().isEmpty) {
+          await ChatRepository.instance.clearDraft(widget.channelId);
+        } else {
+          await ChatRepository.instance.saveDraft(widget.channelId, text);
+        }
+      } catch (_) {}
+    });
   }
 
   void _onLiveMessage(Map<String, dynamic> p) {
@@ -258,6 +285,9 @@ class _ChannelScreenState extends State<ChannelScreen> {
       _pending.clear();
     });
     _clearMentions();
+    _draftTimer?.cancel();
+    unawaited(
+        ChatRepository.instance.clearDraft(widget.channelId).catchError((_) {}));
     _jumpToBottom();
     await _deliver(tempId, text, ids);
   }
@@ -594,6 +624,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   void _onComposerChanged() {
     _pingTyping();
+    _scheduleDraftSave();
     final sel = _composer.selection;
     final text = _composer.text;
     if (!sel.isValid || sel.start != sel.end) {

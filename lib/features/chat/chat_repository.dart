@@ -213,6 +213,28 @@ class ChatRepository {
     return Uint8List.fromList(r.data ?? const []);
   }
 
+  // ---- Drafts (unsent composer text, per conversation) ----
+
+  /// GET /pulse/drafts → { data: [{ channel_id, body }] }. Returns the saved
+  /// draft body for [channelId], or null.
+  Future<String?> loadDraft(int channelId) async {
+    final res = await _dio.get('/pulse/drafts');
+    final list = (res.data['data'] as List? ?? []);
+    for (final d in list) {
+      final m = (d as Map);
+      if ((m['channel_id'] as int?) == channelId) return m['body'] as String?;
+    }
+    return null;
+  }
+
+  Future<void> saveDraft(int channelId, String body) async {
+    await _dio.put('/pulse/channels/$channelId/draft', data: {'body': body});
+  }
+
+  Future<void> clearDraft(int channelId) async {
+    await _dio.delete('/pulse/channels/$channelId/draft');
+  }
+
   // ---- Reactions / message actions ----
 
   /// POST /pulse/messages/{id}/reactions { emoji } — add a reaction (idempotent).
