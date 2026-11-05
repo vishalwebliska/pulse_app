@@ -401,6 +401,10 @@ class _ChannelScreenState extends State<ChannelScreen> {
       ),
       color: cs.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      // Cap the height so a near-bottom message's menu stays on-screen and
+      // scrolls internally instead of being clipped off the bottom.
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
       items: [
         PopupMenuItem<String>(
           padding: EdgeInsets.zero,
