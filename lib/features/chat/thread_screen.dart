@@ -1,11 +1,19 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../core/token_store.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'forward_screen.dart';
+import 'hover_actions.dart';
 
 /// A message thread: the root message + its replies, with a composer to reply.
 /// Opened from the "N replies" indicator or the message action sheet.
+///
+/// Message actions (react, copy, save, pin, forward, edit/delete your own) are
+/// reachable the same way as the main chat: hover toolbar + right-click on
+/// desktop, long-press on touch.
 class ThreadScreen extends StatefulWidget {
   const ThreadScreen({
     super.key,
@@ -28,10 +36,14 @@ class _ThreadScreenState extends State<ThreadScreen> {
   bool _loading = true;
   bool _sending = false;
   String? _error;
+  int? _userId;
+
+  static const List<String> _quickEmojis = ['👍', '❤️', '😂', '🎉', '👀', '✅'];
 
   @override
   void initState() {
     super.initState();
+    _loadUserId();
     _load();
   }
 
@@ -40,6 +52,11 @@ class _ThreadScreenState extends State<ThreadScreen> {
     _composer.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserId() async {
+    final id = await TokenStore.instance.readUserId();
+    if (mounted) setState(() => _userId = id);
   }
 
   Future<void> _load() async {
@@ -92,6 +109,18 @@ class _ThreadScreenState extends State<ThreadScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      }
+    });
+  }
+
+  // ---- Message mutation helpers (parent + replies) ----
+
+  void _updateMessage(int id, PulseMessage Function(PulseMessage) fn) {
+    setState(() {
+      if (_parent != null && _parent!.id == id) {
+        _parent = fn(_parent!);
+      } else {
+        _replies = _replies.map((r) => r.id == id ? fn(r) : r).toList();
       }
     });
   }
@@ -160,29 +189,336 @@ class _ThreadScreenState extends State<ThreadScreen> {
       children: [
         Row(
           children: [
-            Text(m.authorName,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            Flexible(
+              child: Text(m.authorName,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis),
+            ),
             const SizedBox(width: 8),
             if (m.createdAt != null)
               Text(_time(m.createdAt!),
                   style: TextStyle(color: cs.outline, fontSize: 11)),
+            if (m.editedAt != null) ...[
+              const SizedBox(width: 6),
+              Text('(edited)',
+                  style: TextStyle(
+                      color: cs.outline,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic)),
+            ],
+            if (m.isPinned) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.push_pin, size: 12, color: cs.outline),
+            ],
           ],
         ),
         const SizedBox(height: 2),
         _body(m.body),
+        _reactionChips(m),
       ],
     );
-    if (!isParent) {
-      return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: inner);
-    }
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.all(10),
-      child: inner,
+
+    final gesture = GestureDetector(
+      onLongPress: () => _showActions(m),
+      onSecondaryTap: () => _showActions(m),
+      behavior: HitTestBehavior.opaque,
+      child: isParent
+          ? Container(
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              padding: const EdgeInsets.all(10),
+              child: inner,
+            )
+          : Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6), child: inner),
     );
+
+    // Flat left-aligned rows → anchor the hover toolbar to the top-right.
+    return HoverActions(
+      isOwn: false,
+      emojis: _quickEmojis,
+      onReactEmoji: (e) => _toggleReaction(m, e),
+      onMore: () => _showActions(m),
+      child: gesture,
+    );
+  }
+
+  Widget _reactionChips(PulseMessage m) {
+    if (m.reactions.isEmpty) return const SizedBox.shrink();
+    final counts = <String, int>{};
+    final mine = <String>{};
+    for (final r in m.reactions) {
+      counts[r.emoji] = (counts[r.emoji] ?? 0) + 1;
+      if (_userId != null && r.userId == _userId) mine.add(r.emoji);
+    }
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          for (final entry in counts.entries)
+            GestureDetector(
+              onTap: () => _toggleReaction(m, entry.key),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: mine.contains(entry.key)
+                      ? cs.primaryContainer
+                      : cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: mine.contains(entry.key)
+                        ? cs.primary
+                        : cs.outlineVariant,
+                  ),
+                ),
+                child: Text('${entry.key} ${entry.value}',
+                    style: const TextStyle(fontSize: 13)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ---- Actions ----
+
+  void _showActions(PulseMessage m) {
+    final isOwn = _userId != null && m.userId == _userId;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  for (final e in _quickEmojis)
+                    InkWell(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _toggleReaction(m, e);
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(e, style: const TextStyle(fontSize: 26)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading:
+                  Icon(m.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(m.isPinned ? 'Unpin message' : 'Pin message'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePin(m);
+              },
+            ),
+            ListTile(
+              leading: Icon(m.isSaved ? Icons.bookmark : Icons.bookmark_border),
+              title: Text(m.isSaved ? 'Remove from saved' : 'Save message'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _toggleSave(m);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.forward),
+              title: const Text('Forward'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _forward(m);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy text'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _copy(m);
+              },
+            ),
+            if (isOwn)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit message'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editMessage(m);
+                },
+              ),
+            if (isOwn)
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete message'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete(m);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _copy(PulseMessage m) {
+    Clipboard.setData(ClipboardData(text: m.body));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Copied')));
+  }
+
+  Future<void> _toggleReaction(PulseMessage m, String emoji) async {
+    final uid = _userId;
+    if (uid == null) return;
+    final had = m.reactions.any((r) => r.emoji == emoji && r.userId == uid);
+    final updated = [...m.reactions];
+    if (had) {
+      updated.removeWhere((r) => r.emoji == emoji && r.userId == uid);
+    } else {
+      updated.add(MessageReaction(userId: uid, emoji: emoji));
+    }
+    _updateMessage(m.id, (x) => x.copyWith(reactions: updated));
+    try {
+      if (had) {
+        await ChatRepository.instance.removeReaction(m.id, emoji);
+      } else {
+        await ChatRepository.instance.addReaction(m.id, emoji);
+      }
+    } on DioException {
+      _load(); // reconcile with the server on failure
+    }
+  }
+
+  Future<void> _togglePin(PulseMessage m) async {
+    final wasPinned = m.isPinned;
+    _updateMessage(m.id, (x) => x.copyWith(isPinned: !wasPinned));
+    try {
+      if (wasPinned) {
+        await ChatRepository.instance.unpinMessage(m.id);
+      } else {
+        await ChatRepository.instance.pinMessage(m.id);
+      }
+    } on DioException {
+      _updateMessage(m.id, (x) => x.copyWith(isPinned: wasPinned));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update the pin.")),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleSave(PulseMessage m) async {
+    final wasSaved = m.isSaved;
+    _updateMessage(m.id, (x) => x.copyWith(isSaved: !wasSaved));
+    try {
+      if (wasSaved) {
+        await ChatRepository.instance.unsaveMessage(m.id);
+      } else {
+        await ChatRepository.instance.saveMessage(m.id);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(wasSaved ? 'Removed from saved' : 'Saved')),
+      );
+    } on DioException {
+      _updateMessage(m.id, (x) => x.copyWith(isSaved: wasSaved));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update saved.")),
+        );
+      }
+    }
+  }
+
+  void _forward(PulseMessage m) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ForwardScreen(messageId: m.id, preview: m.body),
+    ));
+  }
+
+  Future<void> _editMessage(PulseMessage m) async {
+    final ctrl = TextEditingController(text: m.body);
+    final newBody = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit message'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 6,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (newBody == null || newBody.isEmpty || newBody == m.body) return;
+    _updateMessage(
+        m.id, (x) => x.copyWith(body: newBody, editedAt: DateTime.now()));
+    try {
+      await ChatRepository.instance.editMessage(m.id, newBody);
+    } on DioException {
+      _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't save your edit.")),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(PulseMessage m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('This removes the message for everyone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ChatRepository.instance.deleteMessage(m.id);
+      if (!mounted) return;
+      if (_parent?.id == m.id) {
+        Navigator.of(context).pop(); // thread root gone — leave the thread
+      } else {
+        setState(() => _replies = _replies.where((x) => x.id != m.id).toList());
+      }
+    } on DioException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Couldn't delete the message.")),
+      );
+    }
   }
 
   /// Renders the message body with @mentions highlighted.
