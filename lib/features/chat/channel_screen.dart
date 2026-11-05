@@ -294,96 +294,88 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   // ---- Reactions + message actions ----
 
-  void _showMessageActions(PulseMessage m) {
-    showModalBottomSheet<void>(
+  /// WhatsApp-style context menu anchored at [position] (the click/long-press
+  /// point): a quick-react row on top, then the actions.
+  Future<void> _showMessageActions(PulseMessage m, Offset position) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final cs = Theme.of(context).colorScheme;
+    final isOwn = _userId != null && m.userId == _userId;
+    final result = await showMenu<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  for (final e in _quickEmojis)
-                    InkWell(
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _toggleReaction(m, e);
-                      },
-                      borderRadius: BorderRadius.circular(24),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(e, style: const TextStyle(fontSize: 26)),
-                      ),
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      color: cs.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: [
+        PopupMenuItem<String>(
+          padding: EdgeInsets.zero,
+          height: 44,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final e in _quickEmojis)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => Navigator.of(context).pop('react:$e'),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(e, style: const TextStyle(fontSize: 20)),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.forum_outlined),
-              title: const Text('Reply in thread'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openThread(m);
-              },
-            ),
-            ListTile(
-              leading:
-                  Icon(m.isPinned ? Icons.push_pin : Icons.push_pin_outlined),
-              title: Text(m.isPinned ? 'Unpin message' : 'Pin message'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _togglePin(m);
-              },
-            ),
-            ListTile(
-              leading:
-                  Icon(m.isSaved ? Icons.bookmark : Icons.bookmark_border),
-              title: Text(m.isSaved ? 'Remove from saved' : 'Save message'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _toggleSave(m);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.forward),
-              title: const Text('Forward'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _forwardMessage(m);
-              },
-            ),
-            if (_userId != null && m.userId == _userId)
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit message'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _editMessage(m);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copy text'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _copy(m);
-              },
-            ),
-            if (_userId != null && m.userId == _userId)
-              ListTile(
-                leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete message'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _confirmDelete(m);
-                },
-              ),
-          ],
+          ),
         ),
+        const PopupMenuDivider(),
+        _menuItem('reply', Icons.forum_outlined, 'Reply in thread'),
+        _menuItem('pin', m.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+            m.isPinned ? 'Unpin message' : 'Pin message'),
+        _menuItem('save', m.isSaved ? Icons.bookmark : Icons.bookmark_border,
+            m.isSaved ? 'Remove from saved' : 'Save message'),
+        _menuItem('forward', Icons.forward, 'Forward'),
+        _menuItem('copy', Icons.copy, 'Copy text'),
+        if (isOwn) _menuItem('edit', Icons.edit_outlined, 'Edit message'),
+        if (isOwn) _menuItem('delete', Icons.delete_outline, 'Delete message'),
+      ],
+    );
+    if (result == null || !mounted) return;
+    if (result.startsWith('react:')) {
+      _toggleReaction(m, result.substring(6));
+      return;
+    }
+    switch (result) {
+      case 'reply':
+        _openThread(m);
+      case 'pin':
+        _togglePin(m);
+      case 'save':
+        _toggleSave(m);
+      case 'forward':
+        _forwardMessage(m);
+      case 'copy':
+        _copy(m);
+      case 'edit':
+        _editMessage(m);
+      case 'delete':
+        _confirmDelete(m);
+    }
+  }
+
+  PopupMenuItem<String> _menuItem(String value, IconData icon, String label) {
+    final cs = Theme.of(context).colorScheme;
+    return PopupMenuItem<String>(
+      value: value,
+      height: 42,
+      child: Row(
+        children: [
+          Icon(icon, size: 19, color: cs.outline),
+          const SizedBox(width: 12),
+          Text(label),
+        ],
       ),
     );
   }
@@ -803,12 +795,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final textColor = isOwn ? Colors.white : cs.onSurface;
 
     final bubble = GestureDetector(
-      onLongPress: m.sendState == MessageSendState.sent
-          ? () => _showMessageActions(m)
+      onLongPressStart: m.sendState == MessageSendState.sent
+          ? (d) => _showMessageActions(m, d.globalPosition)
           : null,
-      // Right-click opens the full action menu on desktop (no long-press there).
-      onSecondaryTap: m.sendState == MessageSendState.sent
-          ? () => _showMessageActions(m)
+      // Right-click opens the action menu at the pointer (desktop).
+      onSecondaryTapDown: m.sendState == MessageSendState.sent
+          ? (d) => _showMessageActions(m, d.globalPosition)
           : null,
       behavior: HitTestBehavior.opaque,
       child: Opacity(
@@ -904,7 +896,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
             emojis: _quickEmojis,
             onReactEmoji: (e) => _toggleReaction(m, e),
             onReply: () => _openThread(m),
-            onMore: () => _showMessageActions(m),
+            onMore: (pos) => _showMessageActions(m, pos),
             child: row,
           )
         : row;

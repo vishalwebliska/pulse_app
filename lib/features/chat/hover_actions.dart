@@ -19,7 +19,10 @@ class HoverActions extends StatefulWidget {
   final bool isOwn;
   final List<String> emojis;
   final ValueChanged<String> onReactEmoji;
-  final VoidCallback onMore;
+
+  /// Called with the global position of the More button, so the caller can
+  /// anchor a context menu there (WhatsApp-style).
+  final ValueChanged<Offset> onMore;
 
   /// When null, the Reply button is hidden (e.g. inside a thread, where
   /// replying is just the composer).
@@ -31,6 +34,7 @@ class HoverActions extends StatefulWidget {
 
 class _HoverActionsState extends State<HoverActions> {
   bool _hover = false;
+  final GlobalKey _moreKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +96,23 @@ class _HoverActionsState extends State<HoverActions> {
                 margin: const EdgeInsets.symmetric(horizontal: 4)),
             if (widget.onReply != null)
               _iconBtn(context, Icons.reply_rounded, 'Reply', widget.onReply!),
-            _iconBtn(context, Icons.more_horiz, 'More', widget.onMore),
+            IconButton(
+              key: _moreKey,
+              tooltip: 'More',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+              icon: Icon(Icons.more_horiz, color: cs.outline),
+              onPressed: () {
+                final box =
+                    _moreKey.currentContext?.findRenderObject() as RenderBox?;
+                final pos = box != null
+                    ? box.localToGlobal(box.size.center(Offset.zero))
+                    : Offset.zero;
+                widget.onMore(pos);
+              },
+            ),
           ],
         ),
       ),
