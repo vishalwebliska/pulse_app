@@ -40,7 +40,8 @@ _Last updated: 2026-11-03_
 
 ## Environment / deploy
 - App config (`lib/core/config.dart`) defaults to **prod** (`https://flaxxa.com`); `--dart-define=PULSE_ENV=local` points at `http://localhost:8000` + local Reverb for dev.
-- Builds: Android (`flutter build apk --release --split-per-abi`), Windows (`flutter build windows --release`), macOS via GitHub Actions CI on push.
+- **App icon**: the Flaxxa Pulse mark (orange orb + waveform) via `flutter_launcher_icons` (source `assets/icon/app_icon.png` + adaptive `app_icon_foreground.png`). Regenerate with `dart run flutter_launcher_icons`.
+- **Builds (CI)**: a push to `main` builds **macOS** (`macos.yml`), **Windows** (`windows.yml`) and **Android** split-ABI APKs (`android.yml`) on GitHub-hosted runners → downloadable artifacts on the repo's **Actions** tab (mac can't build on the local Windows box, so CI is the path for all three). Local builds remain possible when RAM allows.
 - **Backend mobile-auth B1/B2/B3: DEPLOYED to prod ✅ (2026-11-03)** — `flaxxa.com/api/v1/auth/mobile/*` live (login 422 on empty body, broadcasting/auth 401); real flaxxa.com users sign in on the prod apps. Prod Reverb + Pulse chat API already live.
 
 ## Test accounts (local dev DB)

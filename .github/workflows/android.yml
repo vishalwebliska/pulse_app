@@ -1,0 +1,33 @@
+name: Android build
+
+# Builds the Pulse Android APKs (split per ABI) on a GitHub-hosted Linux runner
+# and uploads them as a downloadable artifact (no local Android SDK / RAM needed).
+# Run it from the Actions tab ("Run workflow"), or on every push to main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      - run: flutter pub get
+      - run: flutter build apk --release --split-per-abi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulse-android-apk
+          path: build/app/outputs/flutter-apk/*.apk

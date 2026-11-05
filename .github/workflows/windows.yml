@@ -1,0 +1,33 @@
+name: Windows build
+
+# Builds the Pulse Windows .exe on a GitHub-hosted Windows runner and uploads
+# the Release folder as a downloadable artifact (no local Windows build / RAM
+# needed). Run it from the Actions tab ("Run workflow"), or on every push to main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      # Zip the whole Release folder (the .exe needs the DLLs + data next to it).
+      - name: Package the app
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath pulse_app-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulse-windows-app
+          path: pulse_app-windows.zip
