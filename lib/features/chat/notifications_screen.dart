@@ -51,6 +51,7 @@ class NotificationsScreen extends ConsumerWidget {
           channelName: info.title,
           kind: info.kind,
           isDm: info.isDm,
+          highlightMessageId: n.messageId,
         ),
       ));
     } on DioException {

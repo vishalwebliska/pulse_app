@@ -14,6 +14,7 @@ int? activeChannelId;
 class AppNotification {
   AppNotification({
     required this.channelId,
+    required this.messageId,
     required this.userId,
     required this.userName,
     required this.body,
@@ -21,6 +22,7 @@ class AppNotification {
   });
 
   final int channelId;
+  final int? messageId;
   final int? userId;
   final String userName;
   final String body;
@@ -72,6 +74,7 @@ class Notifications extends Notifier<NotifState> {
     if (channelId == activeChannelId) return; // you're viewing this conversation
     final n = AppNotification(
       channelId: channelId,
+      messageId: p['message_id'] as int?,
       userId: uid,
       userName: (p['user_name'] ?? 'Someone') as String,
       body: (p['body'] ?? '') as String,

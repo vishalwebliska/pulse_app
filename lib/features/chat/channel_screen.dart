@@ -31,12 +31,17 @@ class ChannelScreen extends StatefulWidget {
     required this.channelName,
     required this.kind,
     this.isDm = false,
+    this.highlightMessageId,
   });
 
   final int channelId;
   final String channelName;
   final String kind;
   final bool isDm;
+
+  /// When opened from a notification: the message to scroll to and briefly
+  /// flash once the history loads.
+  final int? highlightMessageId;
 
   @override
   State<ChannelScreen> createState() => _ChannelScreenState();
@@ -54,6 +59,11 @@ class _ChannelScreenState extends State<ChannelScreen> {
   bool _showJump = false;
   String? _error;
   int? _userId;
+  // Notification deep-link: the message to scroll to + flash, its key, and the
+  // timer that clears the flash.
+  int? _highlightId;
+  final GlobalKey _highlightKey = GlobalKey();
+  Timer? _highlightTimer;
   PulseRealtime? _realtime;
   StreamSubscription<Map<String, dynamic>>? _rtSub;
   StreamSubscription<Map<String, dynamic>>? _typingSub;
@@ -88,6 +98,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     if (activeChannelId == widget.channelId) activeChannelId = null;
     _composer.removeListener(_onComposerChanged);
     _draftTimer?.cancel();
+    _highlightTimer?.cancel();
     _rtSub?.cancel();
     _typingSub?.cancel();
     _typingCleanup?.cancel();
@@ -239,6 +250,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       });
       _jumpToBottom();
       _markRead();
+      _scrollToHighlight();
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -686,6 +698,40 @@ class _ChannelScreenState extends State<ChannelScreen> {
     });
   }
 
+  /// Opened from a notification: scroll the target message into view and flash
+  /// it briefly (like the web app), then clear the flash. The list has variable
+  /// row heights, so we first jump to roughly the message's position to force
+  /// its tile to build, then fine-tune with Scrollable.ensureVisible.
+  void _scrollToHighlight() {
+    final id = widget.highlightMessageId;
+    if (id == null) return;
+    final idx = _messages.indexWhere((m) => m.id == id);
+    if (idx == -1) return;
+    setState(() => _highlightId = id);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (_scroll.hasClients && _messages.length > 1) {
+        final frac = idx / (_messages.length - 1);
+        _scroll.jumpTo(_scroll.position.maxScrollExtent * frac.clamp(0.0, 1.0));
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      }
+      if (!mounted) return;
+      final ctx = _highlightKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        await Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.4,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+        );
+      }
+      _highlightTimer?.cancel();
+      _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
+        if (mounted) setState(() => _highlightId = null);
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final leadingIcon = widget.isDm
@@ -954,6 +1000,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isOwn = _userId != null && m.userId == _userId;
     const brand = Color(0xFFF97316);
+    final highlighted = _highlightId == m.id;
     final bubbleColor =
         isOwn ? brand : (isDark ? const Color(0xFF1B2438) : Colors.white);
     final textColor = isOwn ? Colors.white : cs.onSurface;
@@ -1065,13 +1112,19 @@ class _ChannelScreenState extends State<ChannelScreen> {
             child: row,
           )
         : row;
-    return Padding(
-      padding: EdgeInsets.only(
-          left: 10,
-          right: 10,
-          top: groupStart ? 8 : 1.5,
-          bottom: groupEnd ? 6 : 1.5),
-      child: content,
+    return AnimatedContainer(
+      key: highlighted ? _highlightKey : null,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+      color: highlighted ? brand.withValues(alpha: 0.16) : Colors.transparent,
+      child: Padding(
+        padding: EdgeInsets.only(
+            left: 10,
+            right: 10,
+            top: groupStart ? 8 : 1.5,
+            bottom: groupEnd ? 6 : 1.5),
+        child: content,
+      ),
     );
   }
 

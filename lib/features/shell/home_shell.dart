@@ -1,8 +1,11 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../activity/activity_page.dart';
+import '../chat/channel_screen.dart';
 import '../chat/chat_page.dart';
+import '../chat/chat_repository.dart';
 import '../chat/notifications_provider.dart';
 import '../chat/presence_provider.dart';
 import '../chat/unread_provider.dart';
@@ -65,10 +68,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           duration: const Duration(seconds: 4),
           action: SnackBarAction(
             label: 'View',
-            onPressed: () {
-              setState(() => _index = 0);
-              _navKeys[0].currentState?.popUntil((r) => r.isFirst);
-            },
+            onPressed: () => _openNotification(n),
           ),
         ));
       }
@@ -114,6 +114,33 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ],
       ),
     );
+  }
+
+  /// Open the conversation a notification points at and flash its message.
+  /// On wide layouts this pushes onto the Chat tab's own navigator (so the
+  /// sidebar stays); on phones it pushes full-screen on the root navigator.
+  Future<void> _openNotification(AppNotification n) async {
+    final wide = MediaQuery.sizeOf(context).width >= 640;
+    setState(() => _index = 0);
+    final NavigatorState? nav =
+        wide ? _navKeys[0].currentState : Navigator.of(context);
+    if (nav == null) return;
+    nav.popUntil((r) => r.isFirst);
+    try {
+      final info = await ChatRepository.instance.channelInfo(n.channelId);
+      if (!mounted) return;
+      nav.push(MaterialPageRoute(
+        builder: (_) => ChannelScreen(
+          channelId: info.id,
+          channelName: info.title,
+          kind: info.kind,
+          isDm: info.isDm,
+          highlightMessageId: n.messageId,
+        ),
+      ));
+    } on DioException {
+      // Couldn't resolve the channel — the tab switch is the best we can do.
+    }
   }
 
   Widget _maybeBadge(int i, Widget child, int unread) {
