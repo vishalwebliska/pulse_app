@@ -16,6 +16,7 @@ import 'forward_screen.dart';
 import 'hover_actions.dart';
 import 'message_text.dart';
 import 'notifications_provider.dart';
+import '../meetings/meeting_helpers.dart';
 import 'pinned_screen.dart';
 import 'search_screen.dart';
 import 'thread_screen.dart';
@@ -64,6 +65,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   int? _highlightId;
   final GlobalKey _highlightKey = GlobalKey();
   Timer? _highlightTimer;
+  bool _startingMeeting = false;
   PulseRealtime? _realtime;
   StreamSubscription<Map<String, dynamic>>? _rtSub;
   StreamSubscription<Map<String, dynamic>>? _typingSub;
@@ -755,6 +757,16 @@ class _ChannelScreenState extends State<ChannelScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Start a meeting',
+            onPressed: _startingMeeting ? null : _startMeeting,
+            icon: _startingMeeting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.videocam_outlined),
+          ),
+          IconButton(
             tooltip: 'Pinned messages',
             onPressed: _openPins,
             icon: const Icon(Icons.push_pin_outlined),
@@ -1299,6 +1311,27 @@ class _ChannelScreenState extends State<ChannelScreen> {
         channelName: widget.channelName,
       ),
     ));
+  }
+
+  /// Mint a Google Meet link for this conversation, open it, and let the posted
+  /// "started a meeting" message flow in (reload covers the Reverb-off case).
+  Future<void> _startMeeting() async {
+    setState(() => _startingMeeting = true);
+    String? url;
+    try {
+      url = await ChatRepository.instance.startMeeting(widget.channelId);
+    } on DioException catch (e) {
+      if (mounted) {
+        showMeetingError(context,
+            statusCode: e.response?.statusCode,
+            message: meetingErrorMessage(e.response?.data));
+      }
+    } finally {
+      if (mounted) setState(() => _startingMeeting = false);
+    }
+    if (url == null || !mounted) return;
+    await openMeetingLink(url);
+    _load();
   }
 
   Widget _reactionChips(PulseMessage m) {

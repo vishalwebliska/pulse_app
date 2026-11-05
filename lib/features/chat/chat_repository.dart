@@ -304,6 +304,19 @@ class ChatRepository {
     await _dio.post('/pulse/messages/$messageId/forward', data: data);
   }
 
+  // ---- Meetings ----
+
+  /// POST /pulse/channels/{id}/meeting → 201 { data: { join_url, message } }.
+  /// Mints a real Google Meet link on the user's connected Google account,
+  /// posts the join link into the channel as a message, and returns the URL.
+  /// A 409 DioException means Google isn't connected (body carries `error`,
+  /// `needs_google`, `google_configured`); 422 means archived / no link.
+  Future<String> startMeeting(int channelId) async {
+    final res = await _dio.post('/pulse/channels/$channelId/meeting');
+    final data = (res.data['data'] as Map).cast<String, dynamic>();
+    return data['join_url'] as String;
+  }
+
   // ---- Threads ----
 
   /// GET /pulse/messages/{id}/thread → { data: { parent, replies:[...] } }
