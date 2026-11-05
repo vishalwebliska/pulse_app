@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/push.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Firebase/FCM is a no-op off Android/iOS/web, so this is safe on desktop.
+  await PushService.initFirebase();
   runApp(const ProviderScope(child: PulseApp()));
 }
 

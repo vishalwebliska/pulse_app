@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
+import '../../core/push.dart';
 import '../../core/token_store.dart';
 import 'workspace.dart';
 
@@ -62,6 +64,8 @@ class AuthController extends Notifier<AuthState> {
     if (token != null && workspaces.isEmpty) {
       await refreshWorkspaces();
     }
+    // Already-signed-in launch: (re)register this device for push.
+    if (token != null) unawaited(PushService.registerForUser());
   }
 
   /// Signs in against POST /api/v1/auth/mobile/login and stores the token +
@@ -84,6 +88,8 @@ class AuthController extends Notifier<AuthState> {
       await _storeWorkspaces(workspaces);
       state = AuthState(AuthStatus.signedIn,
           tenantId: tenantId, userId: userId, workspaces: workspaces);
+      // Register this device for push (Android/iOS/web only; no-op elsewhere).
+      unawaited(PushService.registerForUser());
       return null;
     } on DioException catch (e) {
       switch (e.response?.statusCode) {
@@ -101,6 +107,7 @@ class AuthController extends Notifier<AuthState> {
     await TokenStore.instance.save(token: token, tenantId: tenantId);
     state = AuthState(AuthStatus.signedIn,
         tenantId: tenantId, workspaces: state.workspaces);
+    unawaited(PushService.registerForUser());
     await refreshWorkspaces();
   }
 

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "82677459502",
+    "firebase_url": "https://anroidapp1234.firebaseio.com",
+    "project_id": "anroidapp1234",
+    "storage_bucket": "anroidapp1234.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:82677459502:android:8ac083161d66ed855f0dbf",
+        "android_client_info": {
+          "package_name": "com.flaxxa.pulse_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDC5XtdxGIC_GnnIUfZ6egmpTOtXPmciUU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
