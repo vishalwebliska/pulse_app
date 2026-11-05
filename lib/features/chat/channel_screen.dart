@@ -9,6 +9,7 @@ import '../../core/token_store.dart';
 import 'channel_details_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'composer_toolbar.dart';
 import 'forward_screen.dart';
 import 'hover_actions.dart';
 import 'pinned_screen.dart';
@@ -39,6 +40,7 @@ class ChannelScreen extends StatefulWidget {
 
 class _ChannelScreenState extends State<ChannelScreen> {
   final _composer = TextEditingController();
+  final _composerFocus = FocusNode();
   final _scroll = ScrollController();
   List<PulseMessage> _messages = [];
   bool _loading = true;
@@ -79,6 +81,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
     _typingCleanup?.cancel();
     _realtime?.dispose();
     _composer.dispose();
+    _composerFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -832,33 +835,20 @@ class _ChannelScreenState extends State<ChannelScreen> {
       ),
     );
 
-    // On desktop (mouse), a hover toolbar exposes React / Reply / More, since
-    // there's no long-press. Touch devices never hover, so it stays hidden.
-    final interactive = m.sendState == MessageSendState.sent
-        ? HoverActions(
-            isOwn: isOwn,
-            emojis: _quickEmojis,
-            onReactEmoji: (e) => _toggleReaction(m, e),
-            onReply: () => _openThread(m),
-            onMore: () => _showMessageActions(m),
-            child: bubble,
-          )
-        : bubble;
-
     final col = Column(
       crossAxisAlignment:
           isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         if (groupStart && !isOwn)
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 2),
+            padding: const EdgeInsets.only(left: 8, bottom: 4, top: 2),
             child: Text(m.authorName,
                 style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 12.5,
                     color: cs.onSurface)),
           ),
-        interactive,
+        bubble,
         if (isOwn && m.sendState == MessageSendState.sending)
           _statusLabel('Sending…', cs.outline),
         if (isOwn && m.sendState == MessageSendState.failed)
@@ -904,14 +894,27 @@ class _ChannelScreenState extends State<ChannelScreen> {
         ? [Expanded(child: col), const SizedBox(width: 8), avatarOrSpacer]
         : [avatarOrSpacer, const SizedBox(width: 8), Expanded(child: col)];
 
+    final row = Row(
+        crossAxisAlignment: CrossAxisAlignment.start, children: rowChildren);
+    // The hover toolbar wraps the whole row so it paints above the avatar and
+    // isn't clipped by the bubble — desktop only; touch never hovers.
+    final content = m.sendState == MessageSendState.sent
+        ? HoverActions(
+            isOwn: isOwn,
+            emojis: _quickEmojis,
+            onReactEmoji: (e) => _toggleReaction(m, e),
+            onReply: () => _openThread(m),
+            onMore: () => _showMessageActions(m),
+            child: row,
+          )
+        : row;
     return Padding(
       padding: EdgeInsets.only(
           left: 10,
           right: 10,
           top: groupStart ? 8 : 1.5,
           bottom: groupEnd ? 6 : 1.5),
-      child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start, children: rowChildren),
+      child: content,
     );
   }
 
@@ -1219,28 +1222,35 @@ class _ChannelScreenState extends State<ChannelScreen> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        padding: const EdgeInsets.fromLTRB(12, 4, 8, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _composer,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                decoration: InputDecoration(
-                  hintText: hint,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+            ComposerToolbar(controller: _composer, focusNode: _composerFocus),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _composer,
+                    focusNode: _composerFocus,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    decoration: InputDecoration(
+                      hintText: hint,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: _send,
-              icon: const Icon(Icons.send),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: _send,
+                  icon: const Icon(Icons.send),
+                ),
+              ],
             ),
           ],
         ),

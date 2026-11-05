@@ -43,9 +43,11 @@ class _HoverActionsState extends State<HoverActions> {
           widget.child,
           if (_hover)
             Positioned(
-              top: -16,
-              left: widget.isOwn ? 0 : null,
-              right: widget.isOwn ? null : 0,
+              // Float above the message, offset past the avatar gutter so the
+              // full bar is always visible (never clipped by bubble/avatar).
+              top: -12,
+              left: widget.isOwn ? null : 36,
+              right: widget.isOwn ? 36 : null,
               child: _toolbar(context),
             ),
         ],
