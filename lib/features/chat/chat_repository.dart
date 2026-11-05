@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import '../../core/api_client.dart';
@@ -193,6 +195,22 @@ class ChatRepository {
       ),
     );
     return res.headers.value('location');
+  }
+
+  /// Fetches an attachment's bytes (following the presigned URL in prod, or the
+  /// local stream) for inline image previews.
+  Future<Uint8List> fetchAttachmentBytes(int attachmentId) async {
+    final presigned = await resolveAttachmentUrl(attachmentId);
+    if (presigned != null) {
+      final r = await Dio().get<List<int>>(presigned,
+          options: Options(responseType: ResponseType.bytes));
+      return Uint8List.fromList(r.data ?? const []);
+    }
+    final r = await _dio.get<List<int>>(
+      '/pulse/attachments/$attachmentId/url',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(r.data ?? const []);
   }
 
   // ---- Reactions / message actions ----
