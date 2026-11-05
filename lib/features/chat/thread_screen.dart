@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/token_store.dart';
+import 'attachment_view.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'composer_toolbar.dart';
@@ -218,6 +219,7 @@ class _ThreadScreenState extends State<ThreadScreen> {
         ),
         const SizedBox(height: 2),
         _body(m.body),
+        AttachmentView(attachments: m.attachments),
         _reactionChips(m),
       ],
     );

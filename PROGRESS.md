@@ -36,7 +36,7 @@ _Last updated: 2026-11-03_
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
 ## 🔨 In progress
-- **File attachments (first cut)** — composer 📎 picks files (`file_selector`), uploads via the two-step sign → PUT → finalize flow (`uploadAttachment`), shows progress chips, and sends with `attachment_ids`; received messages render openable file chips (`/attachments/{id}/url` → presigned URL → `url_launcher`). Channel only; thread composer not yet wired. Image attachments now render as **tappable inline thumbnails** (`fetchAttachmentBytes` → `Image.memory`, cached per id), falling back to the file chip on error. **Needs real testing** (the presigned PUT in prod couldn't be validated locally).
+- **File attachments (first cut)** — composer 📎 picks files (`file_selector`), uploads via the two-step sign → PUT → finalize flow (`uploadAttachment`), shows progress chips, and sends with `attachment_ids`; received messages render openable file chips (`/attachments/{id}/url` → presigned URL → `url_launcher`). Channel only; thread composer not yet wired. Image attachments render as **tappable inline thumbnails** (`fetchAttachmentBytes` → `Image.memory`, cached per id), falling back to the file chip on error — in a shared `AttachmentView` used by both the channel and **thread** message tiles. (Thread replies can't *carry* attachments: the backend `ThreadController@reply` doesn't accept `attachment_ids` — would need a backend change.) **Needs real testing** (the presigned PUT in prod couldn't be validated locally).
 
 ## 📋 Left / planned
 - Presence online dots — needs joining the Reverb **presence channel**; HTTP `/presence/ping` alone does NOT drive the `online` flag (verified 2026-11-03).
