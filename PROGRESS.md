@@ -14,7 +14,7 @@ _Last updated: 2026-11-03_
 - **Live messages** — Reverb realtime (`message.sent`) + token-aware broadcasting auth (B3).
 - **Reactions** — long-press emoji react; reaction chips with counts; tap to toggle. A **＋ more** button in the quick-react row (conversation + thread) opens a dependency-free **emoji picker** (categorized grid: smileys, gestures, hearts, objects) to react with any emoji.
 - **Message actions** — long-press → Copy, Edit (10-min window; shows an "(edited)" marker), or Delete (your own).
-- **Threads / replies** — "N replies" indicator + thread view (root + replies + composer).
+- **Threads / replies** — "N replies" indicator + thread view (root + replies + composer). A **Follow/Following** bell toggle in the thread header subscribes to the thread (`POST`/`DELETE /messages/{id}/follow`) so you're notified of replies even without a mention.
 - **Message search** — scoped (in-channel, always available) + global (workspace-wide, plan-gated → shows upgrade notice on 402). Entry: Chat-tab search icon (global) + each channel's search button (scoped).
 - **Flaxxa-web theme** — Inter font (google_fonts), Pulse orange `#F97316→#F59E0B` + navy-slate dark `#141C2E` (matching the web's design tokens), proper text sizing + AppBar/nav/input theming; fixed a message-text bug (Flutter's unstyled red/yellow `RichText` fallback → `Text.rich`).
 - **Message timestamps** — per-message clock time ("11:49 AM"); the date lives in the day separator.

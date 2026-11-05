@@ -43,6 +43,11 @@ class _ThreadScreenState extends State<ThreadScreen> {
   bool _sending = false;
   String? _error;
   int? _userId;
+  // Thread follow ("notify me of replies"). The backend exposes no read of the
+  // current state, so this is optimistic + idempotent (following twice is a
+  // safe no-op); it starts un-followed and flips on tap.
+  bool _following = false;
+  bool _followBusy = false;
 
   static const List<String> _quickEmojis = ['👍', '❤️', '😂', '🎉', '👀', '✅'];
 
@@ -120,6 +125,34 @@ class _ThreadScreenState extends State<ThreadScreen> {
     });
   }
 
+  Future<void> _toggleFollow() async {
+    final was = _following;
+    setState(() {
+      _following = !was;
+      _followBusy = true;
+    });
+    try {
+      if (was) {
+        await ChatRepository.instance.unfollowMessage(widget.parentMessageId);
+      } else {
+        await ChatRepository.instance.followMessage(widget.parentMessageId);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(was
+            ? 'Unfollowed thread'
+            : 'Following thread — you\'ll be notified of replies'),
+      ));
+    } on DioException {
+      if (!mounted) return;
+      setState(() => _following = was); // revert
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update follow.")));
+    } finally {
+      if (mounted) setState(() => _followBusy = false);
+    }
+  }
+
   // ---- Message mutation helpers (parent + replies) ----
 
   void _updateMessage(int id, PulseMessage Function(PulseMessage) fn) {
@@ -144,6 +177,16 @@ class _ThreadScreenState extends State<ThreadScreen> {
                 style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400)),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: _following ? 'Following — tap to unfollow' : 'Follow thread',
+            onPressed: _followBusy ? null : _toggleFollow,
+            icon: Icon(_following
+                ? Icons.notifications_active
+                : Icons.notifications_none),
+            color: _following ? Theme.of(context).colorScheme.primary : null,
+          ),
+        ],
       ),
       body: Column(
         children: [

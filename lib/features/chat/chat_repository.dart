@@ -390,6 +390,18 @@ class ChatRepository {
     return (parent: parent, replies: replies);
   }
 
+  /// POST /pulse/messages/{id}/follow — follow a thread (by root or any reply);
+  /// idempotent (201 created / 200 already following). Notifies you of replies
+  /// even without a mention.
+  Future<void> followMessage(int messageId) async {
+    await _dio.post('/pulse/messages/$messageId/follow');
+  }
+
+  /// DELETE /pulse/messages/{id}/follow — stop following the thread.
+  Future<void> unfollowMessage(int messageId) async {
+    await _dio.delete('/pulse/messages/$messageId/follow');
+  }
+
   /// POST /pulse/messages/{id}/replies { body } → 201 { data: message }
   Future<PulseMessage> replyInThread(int messageId, String body) async {
     final res = await _dio.post('/pulse/messages/$messageId/replies',
