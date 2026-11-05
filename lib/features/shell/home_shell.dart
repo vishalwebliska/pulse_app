@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../activity/activity_page.dart';
 import '../chat/chat_page.dart';
 import '../chat/presence_provider.dart';
-import '../chat/refresh_provider.dart';
 import '../chat/unread_provider.dart';
 import '../me/me_page.dart';
 import '../meetings/meetings_page.dart';
@@ -149,7 +148,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ],
             ),
           ),
-          _refreshButton(context),
           const SizedBox(height: 4),
           for (int i = 0; i < _items.length; i++) _navTile(context, i, unread),
           const Spacer(),
@@ -163,23 +161,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
           const SizedBox(height: 10),
         ],
-      ),
-    );
-  }
-
-  Widget _refreshButton(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Align(
-        alignment: _expanded ? Alignment.centerRight : Alignment.center,
-        child: IconButton(
-          tooltip: 'Refresh',
-          iconSize: 20,
-          visualDensity: VisualDensity.compact,
-          icon: Icon(Icons.refresh, color: cs.outline),
-          onPressed: () => ref.read(refreshTickProvider.notifier).bump(),
-        ),
       ),
     );
   }
