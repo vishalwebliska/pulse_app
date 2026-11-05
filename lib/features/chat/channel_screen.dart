@@ -802,6 +802,10 @@ class _ChannelScreenState extends State<ChannelScreen> {
       onLongPress: m.sendState == MessageSendState.sent
           ? () => _showMessageActions(m)
           : null,
+      // Right-click opens the full action menu on desktop (no long-press there).
+      onSecondaryTap: m.sendState == MessageSendState.sent
+          ? () => _showMessageActions(m)
+          : null,
       behavior: HitTestBehavior.opaque,
       child: Opacity(
         opacity: m.sendState == MessageSendState.sending ? 0.7 : 1,
@@ -827,6 +831,19 @@ class _ChannelScreenState extends State<ChannelScreen> {
       ),
     );
 
+    // On desktop (mouse), a hover toolbar exposes React / Reply / More, since
+    // there's no long-press. Touch devices never hover, so it stays hidden.
+    final interactive = m.sendState == MessageSendState.sent
+        ? _HoverActions(
+            isOwn: isOwn,
+            emojis: _quickEmojis,
+            onReactEmoji: (e) => _toggleReaction(m, e),
+            onReply: () => _openThread(m),
+            onMore: () => _showMessageActions(m),
+            child: bubble,
+          )
+        : bubble;
+
     final col = Column(
       crossAxisAlignment:
           isOwn ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -840,7 +857,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
                     fontSize: 12.5,
                     color: cs.onSurface)),
           ),
-        bubble,
+        interactive,
         if (isOwn && m.sendState == MessageSendState.sending)
           _statusLabel('Sending…', cs.outline),
         if (isOwn && m.sendState == MessageSendState.failed)
@@ -1242,5 +1259,111 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
     final ampm = l.hour >= 12 ? 'PM' : 'AM';
     return '$h:${l.minute.toString().padLeft(2, '0')} $ampm';
+  }
+}
+
+/// Desktop hover toolbar for a message bubble — quick-react emojis, Reply, and
+/// More (the full action menu). On touch devices (Android/iOS) the pointer never
+/// hovers, so this stays hidden and long-press is used instead.
+class _HoverActions extends StatefulWidget {
+  const _HoverActions({
+    required this.child,
+    required this.isOwn,
+    required this.emojis,
+    required this.onReactEmoji,
+    required this.onReply,
+    required this.onMore,
+  });
+
+  final Widget child;
+  final bool isOwn;
+  final List<String> emojis;
+  final ValueChanged<String> onReactEmoji;
+  final VoidCallback onReply;
+  final VoidCallback onMore;
+
+  @override
+  State<_HoverActions> createState() => _HoverActionsState();
+}
+
+class _HoverActionsState extends State<_HoverActions> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          widget.child,
+          if (_hover)
+            Positioned(
+              top: -16,
+              left: widget.isOwn ? 0 : null,
+              right: widget.isOwn ? null : 0,
+              child: _toolbar(context),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _toolbar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 6,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final e in widget.emojis.take(4))
+              InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => widget.onReactEmoji(e),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                  child: Text(e, style: const TextStyle(fontSize: 17)),
+                ),
+              ),
+            Container(
+                width: 1,
+                height: 18,
+                color: cs.outlineVariant,
+                margin: const EdgeInsets.symmetric(horizontal: 4)),
+            _iconBtn(context, Icons.reply_rounded, 'Reply', widget.onReply),
+            _iconBtn(context, Icons.more_horiz, 'More', widget.onMore),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconBtn(
+      BuildContext context, IconData icon, String tip, VoidCallback onTap) {
+    final cs = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: tip,
+      iconSize: 18,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+      icon: Icon(icon, color: cs.outline),
+      onPressed: onTap,
+    );
   }
 }
