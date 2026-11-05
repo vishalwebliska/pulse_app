@@ -12,7 +12,7 @@ _Last updated: 2026-11-03_
 - **People search** — "find people" directory search → start a DM.
 - **@mentions** — composer autocomplete (collapsed-name token) + mention highlighting.
 - **Live messages** — Reverb realtime (`message.sent`) + token-aware broadcasting auth (B3).
-- **Reactions** — long-press emoji react; reaction chips with counts; tap to toggle.
+- **Reactions** — long-press emoji react; reaction chips with counts; tap to toggle. A **＋ more** button in the quick-react row (conversation + thread) opens a dependency-free **emoji picker** (categorized grid: smileys, gestures, hearts, objects) to react with any emoji.
 - **Message actions** — long-press → Copy, Edit (10-min window; shows an "(edited)" marker), or Delete (your own).
 - **Threads / replies** — "N replies" indicator + thread view (root + replies + composer).
 - **Message search** — scoped (in-channel, always available) + global (workspace-wide, plan-gated → shows upgrade notice on 402). Entry: Chat-tab search icon (global) + each channel's search button (scoped).

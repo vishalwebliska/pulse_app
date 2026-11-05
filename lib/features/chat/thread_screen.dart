@@ -7,6 +7,7 @@ import 'attachment_view.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'composer_toolbar.dart';
+import 'emoji_picker.dart';
 import 'forward_screen.dart';
 import 'hover_actions.dart';
 import 'message_text.dart';
@@ -328,6 +329,15 @@ class _ThreadScreenState extends State<ThreadScreen> {
                       child: Text(e, style: const TextStyle(fontSize: 20)),
                     ),
                   ),
+                InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => Navigator.of(context).pop('emojipick'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: Icon(Icons.add_reaction_outlined,
+                        size: 20, color: cs.outline),
+                  ),
+                ),
               ],
             ),
           ),
@@ -347,6 +357,11 @@ class _ThreadScreenState extends State<ThreadScreen> {
     if (result == null || !mounted) return;
     if (result.startsWith('react:')) {
       _toggleReaction(m, result.substring(6));
+      return;
+    }
+    if (result == 'emojipick') {
+      final emoji = await showEmojiPicker(context);
+      if (emoji != null && mounted) _toggleReaction(m, emoji);
       return;
     }
     switch (result) {
