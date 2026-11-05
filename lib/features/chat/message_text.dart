@@ -1,11 +1,82 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-/// Renders a Pulse message body with lightweight inline Markdown — the same
-/// subset the composer toolbar produces: **bold**, *italic*, ~~strike~~,
-/// `code`, [links](url) and @mentions. [color] sets the base text colour
-/// (white on own orange bubbles; null keeps the themed ink). Block elements
-/// (lists / quotes) keep their literal markers for now.
+/// Renders a Pulse message body with lightweight Markdown — the subset the
+/// composer toolbar produces: **bold**, *italic*, ~~strike~~, `code`,
+/// [links](url), bare URLs, @mentions, plus block-level bullet / numbered
+/// lists and > quotes. [color] sets the base text colour (white on own orange
+/// bubbles; null keeps the themed ink).
 Widget messageBody(BuildContext context, String body, {Color? color}) {
+  final lines = body.split('\n');
+  final hasBlocks = lines.any((l) => _blockKind(l) != null);
+  if (!hasBlocks) return _inline(context, body, color: color);
+
+  final cs = Theme.of(context).colorScheme;
+  final muted = color ?? cs.outline;
+  final children = <Widget>[];
+  for (final line in lines) {
+    final kind = _blockKind(line);
+    switch (kind) {
+      case 'quote':
+        children.add(Container(
+          margin: const EdgeInsets.symmetric(vertical: 1),
+          padding: const EdgeInsets.only(left: 8),
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: muted, width: 3)),
+          ),
+          child: _inline(context, line.replaceFirst(RegExp(r'^\s*>\s?'), ''),
+              color: color),
+        ));
+      case 'bullet':
+        children.add(_listRow(context, '•   ',
+            line.replaceFirst(RegExp(r'^\s*[-*]\s+'), ''), color, muted));
+      case 'number':
+        final m = RegExp(r'^\s*(\d+)\.\s+(.*)$').firstMatch(line)!;
+        children.add(
+            _listRow(context, '${m.group(1)}.  ', m.group(2)!, color, muted));
+      default:
+        children.add(_inline(context, line, color: color));
+    }
+  }
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: children,
+  );
+}
+
+String? _blockKind(String line) {
+  if (RegExp(r'^\s*>\s').hasMatch(line)) return 'quote';
+  if (RegExp(r'^\s*[-*]\s+').hasMatch(line)) return 'bullet';
+  if (RegExp(r'^\s*\d+\.\s+').hasMatch(line)) return 'number';
+  return null;
+}
+
+Widget _listRow(BuildContext context, String marker, String text, Color? color,
+    Color muted) {
+  final base = (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
+      .copyWith(color: color);
+  return Padding(
+    padding: const EdgeInsets.only(left: 2, top: 1, bottom: 1),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(marker, style: base.copyWith(color: color ?? muted)),
+        Expanded(child: _inline(context, text, color: color)),
+      ],
+    ),
+  );
+}
+
+void _open(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri != null) {
+    launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
+
+Widget _inline(BuildContext context, String text, {Color? color}) {
   final cs = Theme.of(context).colorScheme;
   final base = (Theme.of(context).textTheme.bodyMedium ?? const TextStyle())
       .copyWith(color: color);
@@ -15,14 +86,14 @@ Widget messageBody(BuildContext context, String body, {Color? color}) {
   final codeBg = color != null
       ? Colors.white.withValues(alpha: 0.18)
       : cs.surfaceContainerHighest;
-  final spans = _parseInline(body, base,
+  final spans = _parseInline(text, base,
       mention: mention, code: codeColor, codeBg: codeBg, link: link);
-  // Explicit base style + Text.rich avoids Flutter's red/yellow "unstyled
-  // text" fallback when a span resolves to an empty style.
   return Text.rich(TextSpan(children: spans), style: base);
 }
 
 bool _isSpace(String c) => c == ' ' || c == '\n' || c == '\t' || c == '\r';
+
+final _urlRe = RegExp(r'https?://[^\s<>()]+');
 
 List<InlineSpan> _parseInline(
   String text,
@@ -45,12 +116,18 @@ List<InlineSpan> _parseInline(
       inner, style,
       mention: mention, code: code, codeBg: codeBg, link: link);
 
+  TextSpan linkSpan(String label, String url) => TextSpan(
+        text: label,
+        style: base.copyWith(color: link, decoration: TextDecoration.underline),
+        recognizer: TapGestureRecognizer()..onTap = () => _open(url),
+      );
+
   final n = text.length;
   var i = 0;
   while (i < n) {
     final c = text[i];
 
-    // `inline code` — literal, no nested parsing.
+    // `inline code`
     if (c == '`') {
       final close = text.indexOf('`', i + 1);
       if (close > i) {
@@ -101,21 +178,31 @@ List<InlineSpan> _parseInline(
       }
     }
 
-    // [label](url) — styled, not tappable yet.
+    // [label](url)
     if (c == '[') {
       final closeB = text.indexOf(']', i + 1);
       if (closeB > i && closeB + 1 < n && text[closeB + 1] == '(') {
         final closeP = text.indexOf(')', closeB + 2);
         if (closeP > closeB + 1) {
           flush();
-          spans.add(TextSpan(
-            text: text.substring(i + 1, closeB),
-            style: base.copyWith(
-                color: link, decoration: TextDecoration.underline),
-          ));
+          spans.add(linkSpan(
+              text.substring(i + 1, closeB), text.substring(closeB + 2, closeP)));
           i = closeP + 1;
           continue;
         }
+      }
+    }
+
+    // bare URL
+    if ((c == 'h') &&
+        (text.startsWith('http://', i) || text.startsWith('https://', i))) {
+      final m = _urlRe.matchAsPrefix(text, i);
+      if (m != null) {
+        flush();
+        final url = m.group(0)!;
+        spans.add(linkSpan(url, url));
+        i = m.end;
+        continue;
       }
     }
 
