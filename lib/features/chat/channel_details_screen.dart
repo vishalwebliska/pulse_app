@@ -1,12 +1,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'add_members_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
+import 'presence_provider.dart';
 
 /// Channel details: topic/purpose, member list, add people (private), leave.
-class ChannelDetailsScreen extends StatefulWidget {
+class ChannelDetailsScreen extends ConsumerStatefulWidget {
   const ChannelDetailsScreen({
     super.key,
     required this.channelId,
@@ -19,10 +21,11 @@ class ChannelDetailsScreen extends StatefulWidget {
   final String kind;
 
   @override
-  State<ChannelDetailsScreen> createState() => _ChannelDetailsScreenState();
+  ConsumerState<ChannelDetailsScreen> createState() =>
+      _ChannelDetailsScreenState();
 }
 
-class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
+class _ChannelDetailsScreenState extends ConsumerState<ChannelDetailsScreen> {
   PulseChannel? _info;
   List<ChannelMemberRow> _members = [];
   bool _loading = true;
@@ -114,6 +117,7 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
   Widget _body(ColorScheme cs) {
     final topic = _info?.topic;
     final isGeneral = _info?.isGeneral ?? false;
+    final online = ref.watch(presenceProvider);
     return ListView(
       children: [
         if (topic != null && topic.isNotEmpty) ...[
@@ -135,7 +139,7 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
             onTap: _addPeople,
           ),
         ..._members.map((m) => ListTile(
-              leading: CircleAvatar(child: Text(_initials(m.name))),
+              leading: _memberAvatar(m.name, m.userId, online, cs),
               title: Text(m.name),
               subtitle:
                   Text(m.email, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -166,6 +170,29 @@ class _ChannelDetailsScreenState extends State<ChannelDetailsScreen> {
             style: TextStyle(
                 color: cs.outline, fontSize: 11, fontWeight: FontWeight.w700)),
       );
+
+  Widget _memberAvatar(
+      String name, int userId, Set<int> online, ColorScheme cs) {
+    return Stack(
+      children: [
+        CircleAvatar(child: Text(_initials(name))),
+        if (online.contains(userId))
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: cs.surface, width: 2),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));

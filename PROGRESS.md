@@ -39,7 +39,7 @@ _Last updated: 2026-11-03_
 - **File attachments (first cut)** — composer 📎 picks files (`file_selector`), uploads via the two-step sign → PUT → finalize flow (`uploadAttachment`), shows progress chips, and sends with `attachment_ids`; received messages render openable file chips (`/attachments/{id}/url` → presigned URL → `url_launcher`). Channel only; thread composer not yet wired. Image attachments render as **tappable inline thumbnails** (`fetchAttachmentBytes` → `Image.memory`, cached per id), falling back to the file chip on error — in a shared `AttachmentView` used by both the channel and **thread** message tiles. (Thread replies can't *carry* attachments: the backend `ThreadController@reply` doesn't accept `attachment_ids` — would need a backend change.) **Needs real testing** (the presigned PUT in prod couldn't be validated locally).
 
 ## 📋 Left / planned
-- Presence online dots — needs joining the Reverb **presence channel**; HTTP `/presence/ping` alone does NOT drive the `online` flag (verified 2026-11-03).
+- Presence online dots (HTTP) — the app now sends `POST /presence/ping` every 30s (via `presenceProvider`, kept alive by the shell) and polls `GET /presence/online`; green dots show on **people search** + the **channel member list** (live set ∪ the directory `online` flag). Needs two signed-in accounts to verify; live cross-client push would still want the Reverb `presence.changed` event.
 - Read-state / unread sync.
 - Push notifications (Firebase/FCM) — needs device-token wiring (B5).
 - Meetings tab (LiveKit/Google Meet) — needs backend B4.

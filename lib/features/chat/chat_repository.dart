@@ -235,6 +235,23 @@ class ChatRepository {
     await _dio.delete('/pulse/channels/$channelId/draft');
   }
 
+  // ---- Presence ----
+
+  /// POST /pulse/presence/ping — heartbeat marking the current user online.
+  Future<void> pingPresence() async {
+    await _dio.post('/pulse/presence/ping');
+  }
+
+  /// GET /pulse/presence/online → { data: [userId, ...] }. Online user ids.
+  Future<Set<int>> onlineUserIds() async {
+    final res = await _dio.get('/pulse/presence/online');
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) => e is int ? e : int.tryParse('$e') ?? -1)
+        .where((e) => e > 0)
+        .toSet();
+  }
+
   // ---- Reactions / message actions ----
 
   /// POST /pulse/messages/{id}/reactions { emoji } — add a reaction (idempotent).

@@ -2,21 +2,23 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../chat/channel_screen.dart';
 import '../chat/chat_models.dart';
 import '../chat/chat_repository.dart';
+import '../chat/presence_provider.dart';
 
 /// "Find each other": search the workspace directory and tap a person to open
 /// (or create) a 1:1 direct message with them.
-class PeopleSearchScreen extends StatefulWidget {
+class PeopleSearchScreen extends ConsumerStatefulWidget {
   const PeopleSearchScreen({super.key});
 
   @override
-  State<PeopleSearchScreen> createState() => _PeopleSearchScreenState();
+  ConsumerState<PeopleSearchScreen> createState() => _PeopleSearchScreenState();
 }
 
-class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
+class _PeopleSearchScreenState extends ConsumerState<PeopleSearchScreen> {
   final _search = TextEditingController();
   Timer? _debounce;
   List<PulseMember> _results = [];
@@ -130,6 +132,7 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
 
   Widget _buildBody() {
     final cs = Theme.of(context).colorScheme;
+    final online = ref.watch(presenceProvider);
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text(_error!));
     if (_results.isEmpty) {
@@ -146,7 +149,7 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
           leading: Stack(
             children: [
               CircleAvatar(child: Text(_initials(m.name))),
-              if (m.online)
+              if (m.online || online.contains(m.userId))
                 Positioned(
                   right: 0,
                   bottom: 0,

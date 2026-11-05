@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../activity/activity_page.dart';
 import '../chat/chat_page.dart';
+import '../chat/presence_provider.dart';
 import '../chat/unread_provider.dart';
 import '../me/me_page.dart';
 import '../meetings/meetings_page.dart';
@@ -46,6 +47,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final unread = ref.watch(unreadTotalProvider);
+    ref.watch(presenceProvider); // keep presence alive (ping + poll) app-wide
     final wide = MediaQuery.sizeOf(context).width >= 640;
     if (!wide) {
       // Phones keep the bottom nav — a left rail there would be cramped.
