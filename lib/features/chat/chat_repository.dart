@@ -496,6 +496,56 @@ class ChatRepository {
     await _dio.delete('/pulse/messages/$messageId/save');
   }
 
+  // ---- Todos (assignable workspace tasks) ----
+
+  /// GET /pulse/todos?filter=mine|assigned|created|all → { data: [...] }.
+  Future<List<PulseTodo>> todos({String filter = 'mine'}) async {
+    final res =
+        await _dio.get('/pulse/todos', queryParameters: {'filter': filter});
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) => PulseTodo.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// POST /pulse/todos { title, description?, assigned_to_user_id? } → 201.
+  Future<PulseTodo> createTodo({
+    required String title,
+    String? description,
+    int? assignedToUserId,
+  }) async {
+    final data = <String, dynamic>{'title': title};
+    if (description != null && description.isNotEmpty) {
+      data['description'] = description;
+    }
+    if (assignedToUserId != null) {
+      data['assigned_to_user_id'] = assignedToUserId;
+    }
+    final res = await _dio.post('/pulse/todos', data: data);
+    return PulseTodo.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  /// PATCH /pulse/todos/{id} { title?, description?, is_done?,
+  /// assigned_to_user_id? } — creator or assignee only.
+  Future<PulseTodo> updateTodo(int id,
+      {String? title,
+      String? description,
+      bool? isDone,
+      int? assignedToUserId}) async {
+    final data = <String, dynamic>{};
+    if (title != null) data['title'] = title;
+    if (description != null) data['description'] = description;
+    if (isDone != null) data['is_done'] = isDone;
+    if (assignedToUserId != null) data['assigned_to_user_id'] = assignedToUserId;
+    final res = await _dio.patch('/pulse/todos/$id', data: data);
+    return PulseTodo.fromJson((res.data['data'] as Map).cast<String, dynamic>());
+  }
+
+  /// DELETE /pulse/todos/{id} — creator or assignee only.
+  Future<void> deleteTodo(int id) async {
+    await _dio.delete('/pulse/todos/$id');
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.

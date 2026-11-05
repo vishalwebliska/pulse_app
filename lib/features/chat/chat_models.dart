@@ -274,6 +274,44 @@ class PulseReminder {
   }
 }
 
+/// A workspace todo from `GET /pulse/todos` — assignable task with a creator
+/// and optional assignee.
+class PulseTodo {
+  const PulseTodo({
+    required this.id,
+    required this.title,
+    required this.isDone,
+    this.description,
+    this.creatorName,
+    this.assigneeName,
+    this.assignedToUserId,
+  });
+
+  final int id;
+  final String title;
+  final bool isDone;
+  final String? description;
+  final String? creatorName;
+  final String? assigneeName;
+  final int? assignedToUserId;
+
+  static bool _bool(dynamic v) => v == true || v == 1 || v == '1';
+
+  factory PulseTodo.fromJson(Map<String, dynamic> j) {
+    final creator = j['creator'];
+    final assignee = j['assignee'];
+    return PulseTodo(
+      id: j['id'] as int,
+      title: (j['title'] ?? '') as String,
+      isDone: _bool(j['is_done']),
+      description: j['description'] as String?,
+      creatorName: creator is Map ? creator['name'] as String? : null,
+      assigneeName: assignee is Map ? assignee['name'] as String? : null,
+      assignedToUserId: j['assigned_to_user_id'] as int?,
+    );
+  }
+}
+
 /// A message search hit from `GET /pulse/search` (carries its channel).
 class SearchResult {
   const SearchResult({

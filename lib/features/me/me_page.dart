@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/auth_controller.dart';
 import '../chat/reminders_screen.dart';
 import '../chat/saved_screen.dart';
+import '../chat/todos_screen.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -60,6 +61,14 @@ class MePage extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const RemindersScreen())),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.check_circle_outline),
+            title: const Text('Todos'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const TodosScreen())),
           ),
           const Divider(height: 1),
           const SizedBox(height: 28),
