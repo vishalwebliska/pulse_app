@@ -8,6 +8,8 @@ import 'channel_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'new_group_screen.dart';
+import 'notifications_provider.dart';
+import 'notifications_screen.dart';
 import 'search_screen.dart';
 import 'unread_provider.dart';
 
@@ -101,11 +103,26 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       if (prev != null && prev.tenantId != next.tenantId) _load();
     });
     final auth = ref.watch(authControllerProvider);
+    final notif = ref.watch(notificationsProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: _buildTitle(auth),
         actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: () {
+              ref.read(notificationsProvider.notifier).markAllSeen();
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const NotificationsScreen()));
+            },
+            icon: notif.unseen > 0
+                ? Badge(
+                    label: Text(notif.unseen > 99 ? '99+' : '${notif.unseen}'),
+                    child: const Icon(Icons.notifications_outlined),
+                  )
+                : const Icon(Icons.notifications_outlined),
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: _load,

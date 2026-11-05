@@ -36,6 +36,7 @@ _Last updated: 2026-11-03_
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
 ## 🔨 In progress
+- **In-app notifications** — a global Reverb listener (`notificationsProvider`, kept alive by the shell) turns messages from others — outside the open conversation — into a notification feed: a **bell** with an unseen-count badge in the chat header opens a notifications list (tap → open the conversation), and an **in-app snackbar banner** (with "View") pops on each new message. Only fires when Reverb is live (prod/CI), not local. **Push** still pending: backend `/device-tokens` exists, but it needs a user-created Firebase project + is Android/iOS-only.
 - **File attachments (first cut)** — composer 📎 picks files (`file_selector`), uploads via the two-step sign → PUT → finalize flow (`uploadAttachment`), shows progress chips, and sends with `attachment_ids`; received messages render openable file chips (`/attachments/{id}/url` → presigned URL → `url_launcher`). Channel only; thread composer not yet wired. Image attachments render as **tappable inline thumbnails** (`fetchAttachmentBytes` → `Image.memory`, cached per id), falling back to the file chip on error — in a shared `AttachmentView` used by both the channel and **thread** message tiles. (Thread replies can't *carry* attachments: the backend `ThreadController@reply` doesn't accept `attachment_ids` — would need a backend change.) **Needs real testing** (the presigned PUT in prod couldn't be validated locally).
 
 ## 📋 Left / planned

@@ -15,6 +15,7 @@ import 'composer_toolbar.dart';
 import 'forward_screen.dart';
 import 'hover_actions.dart';
 import 'message_text.dart';
+import 'notifications_provider.dart';
 import 'pinned_screen.dart';
 import 'search_screen.dart';
 import 'thread_screen.dart';
@@ -72,6 +73,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
   @override
   void initState() {
     super.initState();
+    activeChannelId = widget.channelId;
     _loadUserId();
     _load();
     _loadDraft();
@@ -83,6 +85,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
 
   @override
   void dispose() {
+    if (activeChannelId == widget.channelId) activeChannelId = null;
     _composer.removeListener(_onComposerChanged);
     _draftTimer?.cancel();
     _rtSub?.cancel();

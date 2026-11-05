@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../activity/activity_page.dart';
 import '../chat/chat_page.dart';
+import '../chat/notifications_provider.dart';
 import '../chat/presence_provider.dart';
 import '../chat/unread_provider.dart';
 import '../me/me_page.dart';
@@ -52,6 +53,26 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Widget build(BuildContext context) {
     final unread = ref.watch(unreadTotalProvider);
     ref.watch(presenceProvider); // keep presence alive (ping + poll) app-wide
+    // In-app banner when a message arrives outside the open conversation.
+    ref.listen(notificationsProvider, (prev, next) {
+      if (prev != null && next.unseen > prev.unseen && next.items.isNotEmpty) {
+        final n = next.items.first;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.clearSnackBars();
+        messenger.showSnackBar(SnackBar(
+          content: Text('${n.userName}: ${n.body}',
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'View',
+            onPressed: () {
+              setState(() => _index = 0);
+              _navKeys[0].currentState?.popUntil((r) => r.isFirst);
+            },
+          ),
+        ));
+      }
+    });
     final wide = MediaQuery.sizeOf(context).width >= 640;
     if (!wide) {
       // Phones keep the bottom nav — a left rail there would be cramped.
