@@ -8,6 +8,7 @@ import 'channel_screen.dart';
 import 'chat_models.dart';
 import 'chat_repository.dart';
 import 'new_group_screen.dart';
+import 'refresh_provider.dart';
 import 'search_screen.dart';
 import 'unread_provider.dart';
 
@@ -100,6 +101,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     ref.listen<AuthState>(authControllerProvider, (prev, next) {
       if (prev != null && prev.tenantId != next.tenantId) _load();
     });
+    ref.listen(refreshTickProvider, (_, __) => _load());
     final auth = ref.watch(authControllerProvider);
 
     return Scaffold(

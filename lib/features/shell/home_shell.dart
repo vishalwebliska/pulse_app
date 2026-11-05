@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../activity/activity_page.dart';
 import '../chat/chat_page.dart';
 import '../chat/presence_provider.dart';
+import '../chat/refresh_provider.dart';
 import '../chat/unread_provider.dart';
 import '../me/me_page.dart';
 import '../meetings/meetings_page.dart';
@@ -29,6 +30,10 @@ const Color _brand = Color(0xFFF97316);
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
   bool _expanded = false;
+  // One nested navigator per tab (desktop) so sub-pages open beside the fixed
+  // sidebar instead of covering it.
+  final List<GlobalKey<NavigatorState>> _navKeys =
+      List.generate(4, (_) => GlobalKey<NavigatorState>());
 
   static const List<Widget> _pages = [
     ChatPage(),
@@ -73,7 +78,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         children: [
           _sidebar(context, unread),
           const VerticalDivider(width: 1),
-          Expanded(child: IndexedStack(index: _index, children: _pages)),
+          Expanded(
+            child: IndexedStack(
+              index: _index,
+              children: [
+                for (int i = 0; i < _pages.length; i++)
+                  Navigator(
+                    key: _navKeys[i],
+                    onGenerateRoute: (settings) =>
+                        MaterialPageRoute(builder: (_) => _pages[i]),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -132,6 +149,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ],
             ),
           ),
+          _refreshButton(context),
           const SizedBox(height: 4),
           for (int i = 0; i < _items.length; i++) _navTile(context, i, unread),
           const Spacer(),
@@ -149,6 +167,23 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
+  Widget _refreshButton(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Align(
+        alignment: _expanded ? Alignment.centerRight : Alignment.center,
+        child: IconButton(
+          tooltip: 'Refresh',
+          iconSize: 20,
+          visualDensity: VisualDensity.compact,
+          icon: Icon(Icons.refresh, color: cs.outline),
+          onPressed: () => ref.read(refreshTickProvider.notifier).bump(),
+        ),
+      ),
+    );
+  }
+
   Widget _navTile(BuildContext context, int i, int unread) {
     final cs = Theme.of(context).colorScheme;
     final selected = _index == i;
@@ -158,7 +193,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => setState(() => _index = i),
+        onTap: () {
+          if (i == _index) {
+            _navKeys[i].currentState?.popUntil((r) => r.isFirst);
+          } else {
+            setState(() => _index = i);
+          }
+        },
         child: Container(
           height: 44,
           padding: EdgeInsets.symmetric(horizontal: _expanded ? 14 : 0),
