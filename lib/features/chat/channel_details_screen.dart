@@ -31,10 +31,51 @@ class _ChannelDetailsScreenState extends ConsumerState<ChannelDetailsScreen> {
   bool _loading = true;
   String? _error;
 
+  // Per-channel notification preference (all | mentions | muted). Only shown
+  // once loaded, since non-members (public channels) get a 404.
+  String _notifPref = 'all';
+  bool _prefsLoaded = false;
+  bool _savingPref = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    try {
+      final prefs =
+          await ChatRepository.instance.channelPreferences(widget.channelId);
+      if (!mounted) return;
+      setState(() {
+        _notifPref = prefs.pref;
+        _prefsLoaded = true;
+      });
+    } on DioException {
+      // Not a member / not supported — hide the section.
+    }
+  }
+
+  Future<void> _setNotifPref(String pref) async {
+    if (pref == _notifPref || _savingPref) return;
+    final previous = _notifPref;
+    setState(() {
+      _notifPref = pref;
+      _savingPref = true;
+    });
+    try {
+      await ChatRepository.instance
+          .updateChannelPreferences(widget.channelId, pref: pref);
+    } on DioException {
+      if (!mounted) return;
+      setState(() => _notifPref = previous); // revert
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't update notifications.")));
+    } finally {
+      if (mounted) setState(() => _savingPref = false);
+    }
   }
 
   Future<void> _load() async {
@@ -128,6 +169,16 @@ class _ChannelDetailsScreenState extends ConsumerState<ChannelDetailsScreen> {
           ),
           const Divider(height: 1),
         ],
+        if (_prefsLoaded) ...[
+          _label('NOTIFICATIONS', cs),
+          _notifOption('all', 'All messages',
+              'Notify me about every message', Icons.notifications_active_outlined),
+          _notifOption('mentions', 'Only @mentions',
+              'Notify me only when I\'m mentioned', Icons.alternate_email),
+          _notifOption('muted', 'Muted',
+              'No notifications from this channel', Icons.notifications_off_outlined),
+          const Divider(height: 1),
+        ],
         _label('MEMBERS (${_members.length})', cs),
         if (widget.kind == 'private')
           ListTile(
@@ -170,6 +221,23 @@ class _ChannelDetailsScreenState extends ConsumerState<ChannelDetailsScreen> {
             style: TextStyle(
                 color: cs.outline, fontSize: 11, fontWeight: FontWeight.w700)),
       );
+
+  Widget _notifOption(
+      String value, String title, String subtitle, IconData icon) {
+    final cs = Theme.of(context).colorScheme;
+    final selected = _notifPref == value;
+    return ListTile(
+      leading: Icon(icon, color: selected ? cs.primary : cs.outline),
+      title: Text(title,
+          style: TextStyle(
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected ? cs.primary : cs.onSurface)),
+      subtitle: Text(subtitle,
+          maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: selected ? Icon(Icons.check, color: cs.primary) : null,
+      onTap: _savingPref ? null : () => _setNotifPref(value),
+    );
+  }
 
   Widget _memberAvatar(
       String name, int userId, Set<int> online, ColorScheme cs) {

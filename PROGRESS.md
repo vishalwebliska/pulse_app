@@ -34,6 +34,7 @@ _Last updated: 2026-11-03_
 - **Typing indicators** — live "X is typing…" while others type (throttled `POST /pulse/typing/{id}` → `member.typing` over Reverb; 5s expiry).
 - **Forward** — forward any message to another channel/DM with an optional note (`POST /messages/{id}/forward`).
 - **Channel details** — tap a channel's name → topic, member list + roles, **Add people** (private), and **Leave channel** (`GET /channels/{id}`, `GET`/`POST /channels/{id}/members`, `POST /channels/{id}/leave`).
+- **Notification controls** — per-channel **notification preference** in channel details (All messages · Only @mentions · Muted → `GET`/`PUT /channels/{id}/my-preferences`), and **Mark unread from here** on any message (`POST /channels/{id}/unread { message_id }`), which moves the read pointer back and leaves the conversation so the chat-list badge reappears.
 - **Local web preview** — `flutter build web` (local mode) served at `http://127.0.0.1:8099` for in-browser testing.
 
 ## 🔨 In progress

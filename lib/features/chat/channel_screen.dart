@@ -277,6 +277,24 @@ class _ChannelScreenState extends State<ChannelScreen> {
     }
   }
 
+  /// Mark the conversation unread from [m] (it and everything after count as
+  /// unread again), then leave so the chat list shows the badge — matching the
+  /// "I'll come back to this" intent. ChannelScreen re-marks read on open, so
+  /// staying here would undo it.
+  Future<void> _markUnread(PulseMessage m) async {
+    try {
+      await ChatRepository.instance.markUnread(widget.channelId, m.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Marked as unread')));
+      Navigator.of(context).maybePop();
+    } on DioException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't mark as unread.")));
+    }
+  }
+
   Future<void> _send() async {
     final text = _composer.text.trim();
     final ids = _pending
@@ -471,6 +489,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
         _menuItem('save', m.isSaved ? Icons.bookmark : Icons.bookmark_border,
             m.isSaved ? 'Remove from saved' : 'Save message'),
         _menuItem('remind', Icons.schedule_outlined, 'Remind me'),
+        _menuItem('unread', Icons.mark_chat_unread_outlined,
+            'Mark unread from here'),
         _menuItem('forward', Icons.forward, 'Forward'),
         _menuItem('copy', Icons.copy, 'Copy text'),
         if (isOwn) _menuItem('edit', Icons.edit_outlined, 'Edit message'),
@@ -491,6 +511,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
         _toggleSave(m);
       case 'remind':
         remindAboutMessage(context, m.id);
+      case 'unread':
+        _markUnread(m);
       case 'forward':
         _forwardMessage(m);
       case 'copy':

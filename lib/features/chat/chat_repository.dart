@@ -73,6 +73,39 @@ class ChatRepository {
     await _dio.post('/pulse/channels/$channelId/leave');
   }
 
+  // ---- Per-channel notification preferences ----
+
+  /// GET /pulse/channels/{id}/my-preferences → { data: { notifications_pref,
+  /// muted_until } }. 404 if the user isn't a member of this channel.
+  Future<({String pref, DateTime? mutedUntil})> channelPreferences(
+      int channelId) async {
+    final res = await _dio.get('/pulse/channels/$channelId/my-preferences');
+    final d = (res.data['data'] as Map).cast<String, dynamic>();
+    return (
+      pref: (d['notifications_pref'] ?? 'all') as String,
+      mutedUntil: d['muted_until'] != null
+          ? DateTime.tryParse(d['muted_until'] as String)
+          : null,
+    );
+  }
+
+  /// PUT /pulse/channels/{id}/my-preferences { notifications_pref?,
+  /// muted_minutes? } — pref is all | mentions | muted.
+  Future<void> updateChannelPreferences(int channelId,
+      {String? pref, int? mutedMinutes}) async {
+    final data = <String, dynamic>{};
+    if (pref != null) data['notifications_pref'] = pref;
+    if (mutedMinutes != null) data['muted_minutes'] = mutedMinutes;
+    await _dio.put('/pulse/channels/$channelId/my-preferences', data: data);
+  }
+
+  /// POST /pulse/channels/{id}/unread { message_id } — mark the conversation
+  /// unread from a message (it and everything after count as unread again).
+  Future<void> markUnread(int channelId, int messageId) async {
+    await _dio.post('/pulse/channels/$channelId/unread',
+        data: {'message_id': messageId});
+  }
+
   // ---- Direct messages ----
 
   /// GET /pulse/dms → { data: [ channel w/ display_name ] }
