@@ -546,6 +546,26 @@ class ChatRepository {
     await _dio.delete('/pulse/todos/$id');
   }
 
+  // ---- Global user search (find anyone on Flaxxa) ----
+
+  /// POST /auth/mobile/contacts/search { q } → { data: [{id,name,email}] }.
+  /// Email prefix suggestions, or an exact phone-number match (privacy-aware —
+  /// phone numbers are never partially matched or returned).
+  Future<List<FlaxxaUser>> searchFlaxxaUsers(String q) async {
+    final res =
+        await _dio.post('/auth/mobile/contacts/search', data: {'q': q});
+    final list = (res.data['data'] as List? ?? []);
+    return list
+        .map((e) => FlaxxaUser.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// POST /auth/mobile/contacts/invite { email } — invite someone (by email)
+  /// into your workspace so you can chat. 409 if they're already a member.
+  Future<void> inviteContact(String email) async {
+    await _dio.post('/auth/mobile/contacts/invite', data: {'email': email});
+  }
+
   // ---- People directory ----
 
   /// GET /pulse/members/directory?q= → { data: [ {user_id,name,email,status,online} ] }.

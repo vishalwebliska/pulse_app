@@ -415,6 +415,23 @@ class ChannelMemberRow {
   }
 }
 
+/// A Flaxxa user from the global contacts search
+/// (`POST /auth/mobile/contacts/search`) — any registered user, found by email
+/// (prefix) or exact phone number. Only id/name/email are exposed.
+class FlaxxaUser {
+  const FlaxxaUser({required this.id, required this.name, required this.email});
+
+  final int id;
+  final String name;
+  final String email;
+
+  factory FlaxxaUser.fromJson(Map<String, dynamic> j) => FlaxxaUser(
+        id: j['id'] as int,
+        name: (j['name'] ?? '') as String,
+        email: (j['email'] ?? '') as String,
+      );
+}
+
 /// A workspace member from `GET /pulse/members/directory` — used by the
 /// people-search picker and the @-mention autocomplete.
 class PulseMember {
