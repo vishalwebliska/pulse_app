@@ -1,0 +1,28 @@
+# Codemagic CI — free macOS builds (500 min/month) on Codemagic's own Mac
+# machines, bypassing GitHub's unavailable macOS runners.
+#
+# One-time setup: sign in at https://codemagic.io with GitHub (free), add the
+# pulse_app repo, then run the "macos-build" workflow. The build produces
+# pulse_app-macos.zip as a downloadable artifact (Codemagic gives a public
+# artifact link + emails it).
+workflows:
+  macos-build:
+    name: Pulse macOS
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+    scripts:
+      - name: Enable macOS desktop
+        script: flutter config --enable-macos-desktop
+      - name: Get packages
+        script: flutter pub get
+      - name: Build macOS (release, unsigned)
+        script: flutter build macos --release
+      - name: Package the .app
+        script: |
+          cd build/macos/Build/Products/Release
+          zip -r -y pulse_app-macos.zip pulse_app.app
+    artifacts:
+      - build/macos/Build/Products/Release/pulse_app-macos.zip

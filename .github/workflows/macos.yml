@@ -13,9 +13,11 @@ on:
 
 jobs:
   build-macos:
-    # Public repos get free macOS runners, including arm64 (macos-14). The
-    # earlier "macos-14-arm64 not supported" happened while the repo was private.
-    runs-on: macos-14
+    # This account can't schedule the arm64 macos-14 image even on a public repo
+    # ("macos-14-arm64-us-default is not supported" -> instant cancel), so use
+    # the Intel macos-13. Note GitHub's free Intel macOS capacity can queue a
+    # long time; Codemagic (codemagic.yaml) is the reliable free alternative.
+    runs-on: macos-13
     permissions:
       contents: write
     steps:
