@@ -129,6 +129,13 @@ class PushService {
     }
   }
 
-  static const String _webVapidKey =
-      String.fromEnvironment('PULSE_WEB_VAPID', defaultValue: '');
+  // Web Push VAPID public key (Firebase Console → project anroidapp1234 →
+  // Cloud Messaging → Web Push certificates). Public by design — safe to commit
+  // — and baked in as the default so every build (local + CI) can mint a web
+  // push token without a --dart-define flag; override per-build if it rotates.
+  static const String _webVapidKey = String.fromEnvironment(
+    'PULSE_WEB_VAPID',
+    defaultValue:
+        'BEihE4_zEj5LHL5HI_zD0HYx3b7LcLo_yyotCvi_oxM4qlKAJnwzlC05cDylUrhlqqNdWg0lbB8-oAoq8RSQE14',
+  );
 }
