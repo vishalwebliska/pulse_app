@@ -252,9 +252,14 @@ class _ChannelScreenState extends State<ChannelScreen> {
         _messages = msgs;
         _loading = false;
       });
-      _jumpToBottom();
       _markRead();
-      _scrollToHighlight();
+      // Jump to a specific message when opened from a notification; otherwise
+      // land at the newest message. (Doing both fought each other.)
+      if (widget.highlightMessageId != null) {
+        _scrollToHighlight();
+      } else {
+        _jumpToBottom();
+      }
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -749,29 +754,48 @@ class _ChannelScreenState extends State<ChannelScreen> {
     final id = widget.highlightMessageId;
     if (id == null) return;
     final idx = _messages.indexWhere((m) => m.id == id);
-    if (idx == -1) return;
+    if (idx == -1) {
+      // Target isn't in the loaded window — at least show the conversation.
+      _jumpToBottom();
+      return;
+    }
     setState(() => _highlightId = id);
+    _ensureHighlightVisible(idx, tries: 12);
+  }
+
+  /// Scroll the highlighted message into view. Rows have variable heights, so
+  /// the target tile may not be built yet: jump toward its estimated position
+  /// and retry across frames until its GlobalKey resolves, then centre it and
+  /// start the fade-out.
+  void _ensureHighlightVisible(int idx, {required int tries}) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      if (_scroll.hasClients && _messages.length > 1) {
-        final frac = idx / (_messages.length - 1);
-        _scroll.jumpTo(_scroll.position.maxScrollExtent * frac.clamp(0.0, 1.0));
-        await Future<void>.delayed(const Duration(milliseconds: 60));
-      }
       if (!mounted) return;
       final ctx = _highlightKey.currentContext;
       if (ctx != null && ctx.mounted) {
         await Scrollable.ensureVisible(
           ctx,
-          alignment: 0.4,
-          duration: const Duration(milliseconds: 350),
+          alignment: 0.35,
+          duration: const Duration(milliseconds: 320),
           curve: Curves.easeInOut,
         );
+        _startHighlightFade();
+        return;
       }
-      _highlightTimer?.cancel();
-      _highlightTimer = Timer(const Duration(milliseconds: 1600), () {
-        if (mounted) setState(() => _highlightId = null);
-      });
+      if (tries <= 0 || !_scroll.hasClients || _messages.length <= 1) {
+        _startHighlightFade();
+        return;
+      }
+      // Not built yet → jump toward the estimated position and try next frame.
+      final frac = (idx / (_messages.length - 1)).clamp(0.0, 1.0);
+      _scroll.jumpTo(_scroll.position.maxScrollExtent * frac);
+      _ensureHighlightVisible(idx, tries: tries - 1);
+    });
+  }
+
+  void _startHighlightFade() {
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _highlightId = null);
     });
   }
 
@@ -1169,7 +1193,7 @@ class _ChannelScreenState extends State<ChannelScreen> {
       key: highlighted ? _highlightKey : null,
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOut,
-      color: highlighted ? brand.withValues(alpha: 0.16) : Colors.transparent,
+      color: highlighted ? brand.withValues(alpha: 0.28) : Colors.transparent,
       child: Padding(
         padding: EdgeInsets.only(
             left: 10,

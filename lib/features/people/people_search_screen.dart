@@ -92,15 +92,12 @@ class _PeopleSearchScreenState extends ConsumerState<PeopleSearchScreen> {
                   fromWorkspace: false))
               .toList();
           global = true;
-        } on DioException catch (e) {
-          // Global endpoint not deployed yet → fall back to workspace search so
-          // people search still works until the backend ships.
-          if (e.response?.statusCode == 404) {
-            rows = mapMembers(await ChatRepository.instance.directory(q: q));
-            global = false;
-          } else {
-            rethrow;
-          }
+        } on DioException {
+          // The global search endpoint isn't deployed / reachable yet (prod
+          // returns 404/405 until it ships). Fall back to the workspace
+          // directory so "find people" still works meanwhile.
+          rows = mapMembers(await ChatRepository.instance.directory(q: q));
+          global = false;
         }
       }
       if (!mounted) return;
