@@ -255,7 +255,12 @@ class _ChannelScreenState extends State<ChannelScreen> {
       _markRead();
       // Jump to a specific message when opened from a notification; otherwise
       // land at the newest message. (Doing both fought each other.)
-      if (widget.highlightMessageId != null) {
+      final highlightId = widget.highlightMessageId;
+      if (highlightId != null) {
+        // The target may be older than the initial page — page back until it's
+        // loaded, then scroll to it (instead of silently landing at the bottom).
+        await _loadOlderUntilHighlight(highlightId);
+        if (!mounted) return;
         _scrollToHighlight();
       } else {
         _jumpToBottom();
@@ -744,6 +749,30 @@ class _ChannelScreenState extends State<ChannelScreen> {
         _scroll.jumpTo(_scroll.position.maxScrollExtent);
       }
     });
+  }
+
+  /// Deep-link support: we only load the latest ~50 messages up front, so a
+  /// notification/mention pointing at an older message wouldn't be in the window
+  /// and the scroll would give up. Page backwards (oldest-first) until the
+  /// target is loaded, it runs out, or a safety cap is hit.
+  Future<void> _loadOlderUntilHighlight(int targetId) async {
+    var guard = 0;
+    while (mounted &&
+        _messages.isNotEmpty &&
+        _messages.first.id > targetId &&
+        !_messages.any((m) => m.id == targetId) &&
+        guard < 15) {
+      guard++;
+      try {
+        final older = await ChatRepository.instance
+            .messages(widget.channelId, beforeId: _messages.first.id);
+        if (older.isEmpty) break;
+        if (!mounted) return;
+        setState(() => _messages = [...older, ..._messages]);
+      } on DioException {
+        break; // best-effort — scroll to whatever managed to load
+      }
+    }
   }
 
   /// Opened from a notification: scroll the target message into view and flash

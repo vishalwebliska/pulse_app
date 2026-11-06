@@ -133,6 +133,15 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Future<void> _openNotification(AppNotification n) async {
     final wide = MediaQuery.sizeOf(context).width >= 640;
     setState(() => _index = 0);
+    // The message may live in another workspace (Skype-style cross-workspace
+    // notification) — switch to it first so the channel resolves + loads there.
+    final auth = ref.read(authControllerProvider);
+    if (n.tenantId != null && n.tenantId != auth.tenantId) {
+      await ref
+          .read(authControllerProvider.notifier)
+          .switchWorkspace(n.tenantId!);
+      if (!mounted) return;
+    }
     final NavigatorState? nav =
         wide ? _navKeys[0].currentState : Navigator.of(context);
     if (nav == null) return;

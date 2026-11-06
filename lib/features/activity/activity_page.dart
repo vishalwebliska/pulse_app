@@ -65,6 +65,7 @@ class _ActivityPageState extends State<ActivityPage> {
         channelName: m.channelName,
         kind: m.channelKind,
         isDm: m.isDm,
+        highlightMessageId: m.messageId,
       ),
     ));
     if (!mounted) return;

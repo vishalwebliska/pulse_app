@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../auth/auth_controller.dart';
 import 'channel_screen.dart';
 import 'chat_repository.dart';
 import 'notifications_provider.dart';
@@ -34,15 +35,24 @@ class NotificationsScreen extends ConsumerWidget {
                       Text(n.body, maxLines: 2, overflow: TextOverflow.ellipsis),
                   trailing: Text(_time(n.createdAt),
                       style: TextStyle(color: cs.outline, fontSize: 11)),
-                  onTap: () => _open(context, n),
+                  onTap: () => _open(context, ref, n),
                 );
               },
             ),
     );
   }
 
-  Future<void> _open(BuildContext context, AppNotification n) async {
+  Future<void> _open(
+      BuildContext context, WidgetRef ref, AppNotification n) async {
     try {
+      // Switch to the message's workspace first (cross-workspace notification).
+      final auth = ref.read(authControllerProvider);
+      if (n.tenantId != null && n.tenantId != auth.tenantId) {
+        await ref
+            .read(authControllerProvider.notifier)
+            .switchWorkspace(n.tenantId!);
+        if (!context.mounted) return;
+      }
       final info = await ChatRepository.instance.channelInfo(n.channelId);
       if (!context.mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(

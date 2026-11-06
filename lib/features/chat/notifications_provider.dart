@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +20,7 @@ class AppNotification {
     required this.userName,
     required this.body,
     required this.createdAt,
+    this.tenantId,
   });
 
   final int channelId;
@@ -27,6 +29,11 @@ class AppNotification {
   final String userName;
   final String body;
   final DateTime createdAt;
+
+  /// The workspace this message belongs to. It may differ from the workspace
+  /// you're currently viewing (Skype-style: a message from anyone, in any of
+  /// your workspaces, notifies you), so opening it switches workspace first.
+  final String? tenantId;
 }
 
 /// Notification feed state: the recent items + how many are unseen (for the bell
@@ -38,34 +45,55 @@ class NotifState {
 }
 
 /// Global realtime → in-app notifications. While alive (watched by the app
-/// shell) it connects to the workspace Reverb channel and turns messages from
-/// others — outside the conversation you're viewing — into notifications.
+/// shell) it connects to the Reverb channel of **every** workspace you belong
+/// to and turns messages from others — outside the conversation you're viewing —
+/// into notifications, no matter which workspace is on screen.
 class Notifications extends Notifier<NotifState> {
-  PulseRealtime? _rt;
-  StreamSubscription<Map<String, dynamic>>? _sub;
+  final List<PulseRealtime> _rts = [];
+  final List<StreamSubscription<Map<String, dynamic>>> _subs = [];
   int? _myUserId;
 
   @override
   NotifState build() {
     _start();
-    ref.onDispose(() {
-      _sub?.cancel();
-      _rt?.dispose();
-    });
+    ref.onDispose(_teardown);
     return const NotifState([], 0);
   }
 
   Future<void> _start() async {
     _myUserId = await TokenStore.instance.readUserId();
-    final tenant = await TokenStore.instance.readTenant();
-    if (tenant == null) return;
-    final rt = PulseRealtime(tenant);
-    _rt = rt;
-    rt.connect();
-    _sub = rt.onMessage.listen(_onMessage);
+    // Subscribe to EVERY workspace, so a message from anyone — even in a
+    // workspace you're not viewing — raises a notification (Skype-style).
+    final workspaceIds = await _allWorkspaceIds();
+    for (final wsId in workspaceIds) {
+      final rt = PulseRealtime(wsId);
+      rt.connect();
+      _rts.add(rt);
+      _subs.add(rt.onMessage.listen((p) => _onMessage(p, wsId)));
+    }
   }
 
-  void _onMessage(Map<String, dynamic> p) {
+  /// Every workspace id the user belongs to — the active tenant plus the stored
+  /// workspace list — de-duplicated.
+  Future<List<String>> _allWorkspaceIds() async {
+    final ids = <String>{};
+    final current = await TokenStore.instance.readTenant();
+    if (current != null && current.isNotEmpty) ids.add(current);
+    final raw = await TokenStore.instance.readWorkspaces();
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        for (final w in (jsonDecode(raw) as List)) {
+          final id = (w is Map) ? w['id']?.toString() : null;
+          if (id != null && id.isNotEmpty) ids.add(id);
+        }
+      } catch (_) {
+        // Malformed cache — the active tenant above still gets us notifications.
+      }
+    }
+    return ids.toList();
+  }
+
+  void _onMessage(Map<String, dynamic> p, String tenantId) {
     if (p['parent_message_id'] != null) return; // thread reply, not the main list
     final uid = p['user_id'] as int?;
     if (uid != null && uid == _myUserId) return; // my own message
@@ -81,6 +109,7 @@ class Notifications extends Notifier<NotifState> {
       createdAt: p['created_at'] != null
           ? (DateTime.tryParse(p['created_at'] as String) ?? DateTime.now())
           : DateTime.now(),
+      tenantId: tenantId,
     );
     state = NotifState(
       [n, ...state.items].take(50).toList(),
@@ -88,8 +117,26 @@ class Notifications extends Notifier<NotifState> {
     );
   }
 
+  /// Re-subscribe to the current workspace set — e.g. after someone connects you
+  /// to a new workspace, or you switch/add one. Safe to call repeatedly.
+  Future<void> refresh() async {
+    _teardown();
+    await _start();
+  }
+
   /// Clear the unseen badge (the feed items are kept).
   void markAllSeen() => state = NotifState(state.items, 0);
+
+  void _teardown() {
+    for (final s in _subs) {
+      s.cancel();
+    }
+    for (final r in _rts) {
+      r.dispose();
+    }
+    _subs.clear();
+    _rts.clear();
+  }
 }
 
 final notificationsProvider =
