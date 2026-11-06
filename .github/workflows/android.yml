@@ -2,11 +2,15 @@ name: Android build
 
 # Builds the Pulse Android APKs (split per ABI) on a GitHub-hosted Linux runner
 # and uploads them as a downloadable artifact (no local Android SDK / RAM needed).
-# Run it from the Actions tab ("Run workflow"), or on every push to main.
+#
+# On-demand only: to conserve the private repo's shared Actions-minute budget,
+# this runs when a build is wanted — the Actions tab's "Run workflow" button, or
+# a pushed version tag (v*) — not on every push.
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
+    tags:
+      - 'v*'
 
 jobs:
   build-android:

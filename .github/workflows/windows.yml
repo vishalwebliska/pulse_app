@@ -2,11 +2,16 @@ name: Windows build
 
 # Builds the Pulse Windows .exe on a GitHub-hosted Windows runner and uploads
 # the Release folder as a downloadable artifact (no local Windows build / RAM
-# needed). Run it from the Actions tab ("Run workflow"), or on every push to main.
+# needed).
+#
+# On-demand only: to conserve the private repo's shared Actions-minute budget,
+# this runs when a build is wanted — the Actions tab's "Run workflow" button, or
+# a pushed version tag (v*) — not on every push. (Windows is also built locally.)
 on:
   workflow_dispatch:
   push:
-    branches: [main, master]
+    tags:
+      - 'v*'
 
 jobs:
   build-windows:
