@@ -1,11 +1,9 @@
 name: macOS build
 
-# Builds the Pulse macOS .app on a GitHub-hosted Mac runner and uploads it as a
-# downloadable artifact (no local Mac needed).
+# Builds the Pulse macOS .app on a GitHub-hosted Mac runner and publishes it as
+# a public Release asset (downloadable without login, since the repo is public).
 #
-# On-demand only: macOS runners bill at 10x Actions minutes, so running this on
-# every push quickly exhausts a private repo's monthly budget. Trigger it when
-# you actually want a build — click "Run workflow" on the Actions tab, or push a
+# On-demand only: trigger with "Run workflow" on the Actions tab, or by pushing a
 # version tag (e.g. git tag v1.0.0 && git push origin v1.0.0).
 on:
   workflow_dispatch:
@@ -15,11 +13,11 @@ on:
 
 jobs:
   build-macos:
-    # Intel runner: this account can't schedule the arm64 macos-14 image
-    # ("configuration macos-14-arm64-us-default is not supported" -> instant
-    # cancel). macos-13 (x86_64) is the broadly-available free macOS runner; the
-    # resulting app runs on Apple Silicon Macs via Rosetta.
-    runs-on: macos-13
+    # Public repos get free macOS runners, including arm64 (macos-14). The
+    # earlier "macos-14-arm64 not supported" happened while the repo was private.
+    runs-on: macos-14
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -42,3 +40,13 @@ jobs:
         with:
           name: pulse-macos-app
           path: build/macos/Build/Products/Release/pulse_app-macos.zip
+
+      # Publish to a public Release so the .app can be downloaded without a login.
+      - name: Publish Release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Pulse ${{ github.ref_name }}
+          files: build/macos/Build/Products/Release/pulse_app-macos.zip
+          fail_on_unmatched_files: true
