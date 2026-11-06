@@ -15,7 +15,11 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-14
+    # Intel runner: this account can't schedule the arm64 macos-14 image
+    # ("configuration macos-14-arm64-us-default is not supported" -> instant
+    # cancel). macos-13 (x86_64) is the broadly-available free macOS runner; the
+    # resulting app runs on Apple Silicon Macs via Rosetta.
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
