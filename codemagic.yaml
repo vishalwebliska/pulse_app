@@ -14,6 +14,13 @@ workflows:
       flutter: stable
       xcode: latest
     scripts:
+      # Force CocoaPods, not Swift Package Manager. Newer Flutter defaults to SPM
+      # for Firebase, which collides with the committed macos/Podfile ("plugins
+      # are Swift Packages but project still has CocoaPods integration" -> the
+      # sandbox/Podfile.lock desync that failed the build). CocoaPods + the
+      # Podfile's pod-signing fix is the path that works.
+      - name: Use CocoaPods (disable Swift Package Manager)
+        script: flutter config --no-enable-swift-package-manager
       - name: Enable macOS desktop
         script: flutter config --enable-macos-desktop
       - name: Get packages

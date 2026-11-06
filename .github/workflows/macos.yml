@@ -28,6 +28,9 @@ jobs:
           channel: stable
           flutter-version: 3.47.9
 
+      # Force CocoaPods over Swift Package Manager so the committed macos/Podfile
+      # (pod-signing fix) is used instead of SPM, which collides with it.
+      - run: flutter config --no-enable-swift-package-manager
       - run: flutter config --enable-macos-desktop
       - run: flutter pub get
       - run: flutter build macos --release
