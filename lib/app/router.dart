@@ -18,6 +18,18 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     initialLocation: '/login',
     redirect: (context, state) {
+      // The Google-connect in-app browser returns to the app via the custom
+      // scheme flaxxapulse://google/?connected=1. go_router has no GoRoute for
+      // it, so without this it renders "Page Not Found". Send any flaxxapulse://
+      // deep link into the app — GoogleConnect's own AppLinks listener handles
+      // the connected flag separately.
+      if (state.uri.scheme == 'flaxxapulse' ||
+          state.uri.toString().startsWith('flaxxapulse:')) {
+        return ref.read(authControllerProvider).status == AuthStatus.signedIn
+            ? '/home'
+            : '/login';
+      }
+
       final status = ref.read(authControllerProvider).status;
       if (status == AuthStatus.unknown) return null;
 
