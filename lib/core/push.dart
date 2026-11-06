@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../firebase_options.dart';
 import 'api_client.dart';
+import 'push_navigation.dart';
 
 /// Firebase Cloud Messaging push notifications.
 ///
@@ -43,9 +44,35 @@ class PushService {
         options: DefaultFirebaseOptions.currentPlatform,
       );
       _firebaseReady = true;
+      await _initTapHandlers();
     } catch (_) {
       // Platform not configured in firebase_options — leave push off silently.
     }
+  }
+
+  /// Route a tapped push to the conversation (and message) it points at.
+  /// Covers both entry points: the app launched cold from a notification
+  /// ([getInitialMessage]) and resumed from the background by a tap
+  /// ([onMessageOpenedApp]). The target is stashed in [pendingPushTarget];
+  /// the shell opens it once it is mounted + signed in. No-op display here —
+  /// a foregrounded message is already surfaced by the Reverb in-app path, so
+  /// we deliberately do NOT listen to onMessage (that would double-alert).
+  static bool _tapHandlersReady = false;
+  static Future<void> _initTapHandlers() async {
+    if (!_supported || _tapHandlersReady) return;
+    _tapHandlersReady = true;
+    try {
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) _handleTap(initial);
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
+    } catch (_) {
+      // Messaging not available on this platform/build — stay silent.
+    }
+  }
+
+  static void _handleTap(RemoteMessage message) {
+    final target = pushTargetFromData(message.data);
+    if (target != null) pendingPushTarget.value = target;
   }
 
   /// After sign-in: request permission, read the FCM token and register it with

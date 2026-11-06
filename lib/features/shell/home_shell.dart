@@ -10,6 +10,7 @@ import '../chat/chat_repository.dart';
 import '../chat/notifications_provider.dart';
 import '../chat/presence_provider.dart';
 import '../chat/unread_provider.dart';
+import '../../core/push_navigation.dart';
 import '../me/me_page.dart';
 import '../meetings/meetings_page.dart';
 
@@ -43,6 +44,34 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   // chat + video surface: Chat · Meetings · Me, with Activity hidden. Multi-
   // workspace (team) users keep the full set. Recomputed from auth state in build.
   bool _full = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // A tapped push stashes its target in [pendingPushTarget]. Watch it, and
+    // also drain any target set before we mounted (cold start from a
+    // notification), once the first frame is up so the navigators exist.
+    pendingPushTarget.addListener(_consumePushTarget);
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _consumePushTarget());
+  }
+
+  @override
+  void dispose() {
+    pendingPushTarget.removeListener(_consumePushTarget);
+    super.dispose();
+  }
+
+  void _consumePushTarget() {
+    final target = pendingPushTarget.value;
+    if (target == null || !mounted) return;
+    pendingPushTarget.value = null; // consume so it fires once
+    _openTarget(
+      channelId: target.channelId,
+      messageId: target.messageId,
+      tenantId: target.tenantId,
+    );
+  }
 
   static const _chat =
       _NavItem(Icons.chat_bubble_outline, Icons.chat_bubble, 'Chat');
@@ -130,16 +159,27 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   /// Open the conversation a notification points at and flash its message.
   /// On wide layouts this pushes onto the Chat tab's own navigator (so the
   /// sidebar stays); on phones it pushes full-screen on the root navigator.
-  Future<void> _openNotification(AppNotification n) async {
+  Future<void> _openNotification(AppNotification n) => _openTarget(
+        channelId: n.channelId,
+        messageId: n.messageId,
+        tenantId: n.tenantId,
+      );
+
+  /// Open a conversation (from an in-app notification tap or a push tap) and
+  /// flash the target message. Switches workspace first when the message lives
+  /// in another one (Skype-style cross-workspace delivery), selects the Chat
+  /// tab, then pushes [ChannelScreen] onto its navigator (the tab's own on
+  /// wide layouts so the sidebar stays; the root navigator on phones).
+  Future<void> _openTarget({
+    required int channelId,
+    int? messageId,
+    String? tenantId,
+  }) async {
     final wide = MediaQuery.sizeOf(context).width >= 640;
     setState(() => _index = 0);
-    // The message may live in another workspace (Skype-style cross-workspace
-    // notification) — switch to it first so the channel resolves + loads there.
     final auth = ref.read(authControllerProvider);
-    if (n.tenantId != null && n.tenantId != auth.tenantId) {
-      await ref
-          .read(authControllerProvider.notifier)
-          .switchWorkspace(n.tenantId!);
+    if (tenantId != null && tenantId != auth.tenantId) {
+      await ref.read(authControllerProvider.notifier).switchWorkspace(tenantId);
       if (!mounted) return;
     }
     final NavigatorState? nav =
@@ -147,7 +187,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (nav == null) return;
     nav.popUntil((r) => r.isFirst);
     try {
-      final info = await ChatRepository.instance.channelInfo(n.channelId);
+      final info = await ChatRepository.instance.channelInfo(channelId);
       if (!mounted) return;
       nav.push(MaterialPageRoute(
         builder: (_) => ChannelScreen(
@@ -155,7 +195,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           channelName: info.title,
           kind: info.kind,
           isDm: info.isDm,
-          highlightMessageId: n.messageId,
+          highlightMessageId: messageId,
         ),
       ));
     } on DioException {
