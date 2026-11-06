@@ -28,6 +28,37 @@ jobs:
 
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
+
+      # Firebase is only used on Android/iOS/web (push is guarded off on desktop),
+      # and firebase_core's Windows plugin builds the Firebase C++ SDK, which fails
+      # on a clean CI runner. Drop the `windows:` platform from the cached firebase
+      # plugin pubspecs, then re-resolve, so flutter excludes them from the Windows
+      # build. (The Dart imports still resolve; the native plugin just isn't built
+      # on Windows, where PushService already no-ops.) Editing the source pubspecs
+      # survives flutter's plugin re-resolution, unlike editing the generated list.
+      - name: Exclude Firebase from the Windows build
+        shell: pwsh
+        run: |
+          $roots = @($env:PUB_CACHE, "$env:LOCALAPPDATA\Pub\Cache", "$env:APPDATA\Pub\Cache") |
+            Where-Object { $_ -and (Test-Path "$_\hosted\pub.dev") } | Select-Object -Unique
+          foreach ($root in $roots) {
+            Get-ChildItem "$root\hosted\pub.dev" -Directory -Filter "firebase_*" | ForEach-Object {
+              $pp = Join-Path $_.FullName "pubspec.yaml"
+              if (Test-Path $pp) {
+                $out = New-Object System.Collections.Generic.List[string]
+                $skip = $false
+                foreach ($ln in (Get-Content $pp)) {
+                  if ($ln -match '^\s{6}windows:\s*$') { $skip = $true; continue }
+                  if ($skip) { if ($ln -match '^\s{8}\S') { continue } else { $skip = $false } }
+                  $out.Add($ln)
+                }
+                Set-Content $pp -Value $out -Encoding utf8
+                Write-Host "patched $pp"
+              }
+            }
+          }
+          flutter pub get
+
       - run: flutter build windows --release
 
       # Zip the whole Release folder (the .exe needs the DLLs + data next to it).
