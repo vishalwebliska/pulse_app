@@ -82,7 +82,7 @@ class _AttachmentViewState extends State<AttachmentView> {
               }
               return Image.memory(snap.data!,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _fileChip(a));
+                  errorBuilder: (_, _, _) => _fileChip(a));
             },
           ),
         ),

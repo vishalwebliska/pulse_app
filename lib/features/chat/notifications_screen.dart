@@ -24,7 +24,7 @@ class NotificationsScreen extends ConsumerWidget {
                   style: TextStyle(color: cs.outline)))
           : ListView.separated(
               itemCount: state.items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (ctx, i) {
                 final n = state.items[i];
                 return ListTile(
