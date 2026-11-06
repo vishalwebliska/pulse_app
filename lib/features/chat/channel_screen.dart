@@ -1365,7 +1365,8 @@ class _ChannelScreenState extends State<ChannelScreen> {
       if (mounted) {
         showMeetingError(context,
             statusCode: e.response?.statusCode,
-            message: meetingErrorMessage(e.response?.data));
+            message: meetingErrorMessage(e.response?.data),
+            onConnected: () => _startMeeting());
       }
     } finally {
       if (mounted) setState(() => _startingMeeting = false);

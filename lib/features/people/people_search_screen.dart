@@ -8,6 +8,7 @@ import '../chat/channel_screen.dart';
 import '../chat/chat_models.dart';
 import '../chat/chat_repository.dart';
 import '../chat/presence_provider.dart';
+import '../contacts/contacts_screen.dart';
 
 /// "Find each other": search the workspace directory and tap a person to open
 /// (or create) a 1:1 direct message with them.
@@ -96,6 +97,14 @@ class _PeopleSearchScreenState extends ConsumerState<PeopleSearchScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Find people'),
+        actions: [
+          IconButton(
+            tooltip: 'Add contacts',
+            icon: const Icon(Icons.person_add_alt),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ContactsScreen())),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(

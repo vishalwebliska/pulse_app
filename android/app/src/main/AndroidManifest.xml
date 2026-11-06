@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Device contact sync ("Add contacts"). Requested at runtime. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <application
         android:label="pulse_app"
         android:name="${applicationName}"
@@ -24,6 +26,13 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Google-connect deep link: flaxxapulse://google re-opens the app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="flaxxapulse"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

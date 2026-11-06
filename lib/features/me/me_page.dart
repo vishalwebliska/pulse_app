@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/google_connect.dart';
 import '../auth/auth_controller.dart';
 import '../chat/reminders_screen.dart';
 import '../chat/saved_screen.dart';
 import '../chat/todos_screen.dart';
+import '../contacts/contacts_screen.dart';
+import '../people/people_search_screen.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -46,6 +49,40 @@ class MePage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.group_outlined),
+            title: const Text('Find people'),
+            subtitle: const Text('Message someone in your workspace'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PeopleSearchScreen())),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.person_add_alt),
+            title: const Text('Add contacts'),
+            subtitle: const Text('Invite people by email or from your contacts'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ContactsScreen())),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.videocam_outlined),
+            title: const Text('Connect Google'),
+            subtitle: const Text('Needed to start Meet video calls'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              final ok = await GoogleConnect.connect(context);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(ok
+                    ? 'Google connected — you can start meetings now.'
+                    : 'Google was not connected.'),
+              ));
+            },
+          ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.bookmark_border),

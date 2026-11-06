@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../activity/activity_page.dart';
+import '../auth/auth_controller.dart';
 import '../chat/channel_screen.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_repository.dart';
@@ -34,27 +35,37 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
   bool _expanded = false;
   // One nested navigator per tab (desktop) so sub-pages open beside the fixed
-  // sidebar instead of covering it.
+  // sidebar instead of covering it. Sized to the max tab count (4).
   final List<GlobalKey<NavigatorState>> _navKeys =
       List.generate(4, (_) => GlobalKey<NavigatorState>());
 
-  static const List<Widget> _pages = [
-    ChatPage(),
-    ActivityPage(),
-    MeetingsPage(),
-    MePage(),
-  ];
+  // Personal (Skype-style) accounts — a single workspace — get a focused
+  // chat + video surface: Chat · Meetings · Me, with Activity hidden. Multi-
+  // workspace (team) users keep the full set. Recomputed from auth state in build.
+  bool _full = true;
 
-  static const List<_NavItem> _items = [
-    _NavItem(Icons.chat_bubble_outline, Icons.chat_bubble, 'Chat'),
-    _NavItem(Icons.notifications_outlined, Icons.notifications, 'Activity'),
-    _NavItem(Icons.videocam_outlined, Icons.videocam, 'Meetings'),
-    _NavItem(Icons.person_outline, Icons.person, 'Me'),
-  ];
+  static const _chat =
+      _NavItem(Icons.chat_bubble_outline, Icons.chat_bubble, 'Chat');
+  static const _activity =
+      _NavItem(Icons.notifications_outlined, Icons.notifications, 'Activity');
+  static const _meetings =
+      _NavItem(Icons.videocam_outlined, Icons.videocam, 'Meetings');
+  static const _me = _NavItem(Icons.person_outline, Icons.person, 'Me');
+
+  List<_NavItem> get _items => _full
+      ? const [_chat, _activity, _meetings, _me]
+      : const [_chat, _meetings, _me];
+
+  List<Widget> get _pages => _full
+      ? const [ChatPage(), ActivityPage(), MeetingsPage(), MePage()]
+      : const [ChatPage(), MeetingsPage(), MePage()];
 
   @override
   Widget build(BuildContext context) {
     final unread = ref.watch(unreadTotalProvider);
+    // Team users (>1 workspace) see Activity; personal accounts get chat+video only.
+    _full = ref.watch(authControllerProvider).workspaces.length > 1;
+    if (_index >= _pages.length) _index = _pages.length - 1;
     ref.watch(presenceProvider); // keep presence alive (ping + poll) app-wide
     // In-app banner when a message arrives outside the open conversation.
     ref.listen(notificationsProvider, (prev, next) {

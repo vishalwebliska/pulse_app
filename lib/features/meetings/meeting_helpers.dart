@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/google_connect.dart';
+
 /// Shared handling for the "Start a meeting" action, used by both a
 /// conversation's app bar and the Meetings tab.
 
@@ -25,31 +27,45 @@ String meetingErrorMessage(Object? data) =>
         ? data['error'] as String
         : 'Could not start the meeting. Please try again.';
 
-/// Show the right feedback for a failed meeting: a "connect Google" dialog on
-/// 409 (the user — or the workspace — hasn't linked Google yet, which is done
-/// on the web), otherwise a plain snackbar.
-void showMeetingError(
+/// Show the right feedback for a failed meeting: on 409 (Google not linked) a
+/// "Connect Google" dialog that runs the in-app connect flow and, once linked,
+/// calls [onConnected] so the caller can retry the meeting; otherwise a snackbar.
+Future<void> showMeetingError(
   BuildContext context, {
   required int? statusCode,
   required String message,
-}) {
-  if (statusCode == 409) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.videocam_outlined),
-        title: const Text('Connect Google to meet'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Got it'),
-          ),
-        ],
+  Future<void> Function()? onConnected,
+}) async {
+  if (statusCode != 409) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    return;
+  }
+
+  final wantsConnect = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(Icons.videocam_outlined),
+      title: const Text('Connect Google to meet'),
+      content: Text(
+        '$message\n\nMeetings use Google Meet. Connect your Google account to start one.',
       ),
-    );
-  } else {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Connect Google'),
+        ),
+      ],
+    ),
+  );
+
+  if (wantsConnect != true || !context.mounted) return;
+
+  final connected = await GoogleConnect.connect(context);
+  if (connected && onConnected != null) {
+    await onConnected();
   }
 }

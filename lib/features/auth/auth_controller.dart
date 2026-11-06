@@ -77,20 +77,9 @@ class AuthController extends Notifier<AuthState> {
         data: {'email': email, 'password': password, 'device_name': 'Pulse Flutter'},
       );
       final data = (res.data as Map).cast<String, dynamic>();
-      final token = data['token'] as String?;
-      if (token == null) return 'Sign-in failed. Please try again.';
-      final tenantId = data['tenant_id']?.toString();
-      final user = data['user'];
-      final userId = (user is Map) ? user['id'] as int? : null;
-      final workspaces = _parseWorkspaces(data['workspaces']);
-      await TokenStore.instance.save(token: token, tenantId: tenantId);
-      if (userId != null) await TokenStore.instance.writeUserId(userId);
-      await _storeWorkspaces(workspaces);
-      state = AuthState(AuthStatus.signedIn,
-          tenantId: tenantId, userId: userId, workspaces: workspaces);
-      // Register this device for push (Android/iOS/web only; no-op elsewhere).
-      unawaited(PushService.registerForUser());
-      return null;
+      return (await _applyAuthResponse(data))
+          ? null
+          : 'Sign-in failed. Please try again.';
     } on DioException catch (e) {
       switch (e.response?.statusCode) {
         case 401:
@@ -101,6 +90,73 @@ class AuthController extends Notifier<AuthState> {
           return 'Could not sign in. Check your connection and try again.';
       }
     }
+  }
+
+  /// Creates an account against POST /api/v1/auth/mobile/register — which also
+  /// provisions a personal, Pulse-ready workspace — and signs straight in.
+  /// Returns null on success, or a user-facing error message.
+  Future<String?> register(String name, String email, String password) async {
+    try {
+      final res = await ApiClient.instance.dio.post(
+        '/auth/mobile/register',
+        data: {
+          'name': name,
+          'email': email,
+          'password': password,
+          'device_name': 'Pulse Flutter',
+        },
+      );
+      final data = (res.data as Map).cast<String, dynamic>();
+      return (await _applyAuthResponse(data))
+          ? null
+          : 'Sign-up failed. Please try again.';
+    } on DioException catch (e) {
+      final body = e.response?.data;
+      switch (e.response?.statusCode) {
+        case 409:
+          if (body is Map && body['account_exists'] == true) {
+            return 'You already have an account with this email — please sign in.';
+          }
+          return 'This account needs to be finished on the web for now.';
+        case 422:
+          return _firstError(body) ?? 'Please check your details and try again.';
+        default:
+          return 'Could not create your account. Check your connection and try again.';
+      }
+    }
+  }
+
+  /// Persist a login/signup response (token + tenant + workspaces) and flip the
+  /// auth state to signed-in. Returns false if the response carried no token.
+  Future<bool> _applyAuthResponse(Map<String, dynamic> data) async {
+    final token = data['token'] as String?;
+    if (token == null) return false;
+    final tenantId = data['tenant_id']?.toString();
+    final user = data['user'];
+    final userId = (user is Map) ? user['id'] as int? : null;
+    final workspaces = _parseWorkspaces(data['workspaces']);
+    await TokenStore.instance.save(token: token, tenantId: tenantId);
+    if (userId != null) await TokenStore.instance.writeUserId(userId);
+    await _storeWorkspaces(workspaces);
+    state = AuthState(AuthStatus.signedIn,
+        tenantId: tenantId, userId: userId, workspaces: workspaces);
+    // Register this device for push (Android/iOS/web only; no-op elsewhere).
+    unawaited(PushService.registerForUser());
+    return true;
+  }
+
+  /// First Laravel validation message (or the top-level message) in an error body.
+  String? _firstError(dynamic body) {
+    if (body is Map) {
+      final errors = body['errors'];
+      if (errors is Map) {
+        for (final v in errors.values) {
+          if (v is List && v.isNotEmpty) return v.first.toString();
+        }
+      }
+      if (body['message'] is String) return body['message'] as String;
+    }
+    return null;
   }
 
   Future<void> signInWithToken(String token, {String? tenantId}) async {

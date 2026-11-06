@@ -66,7 +66,8 @@ class _MeetingsPageState extends State<MeetingsPage> {
       if (mounted) {
         showMeetingError(context,
             statusCode: e.response?.statusCode,
-            message: meetingErrorMessage(e.response?.data));
+            message: meetingErrorMessage(e.response?.data),
+            onConnected: () => _startMeeting(c));
       }
     } finally {
       if (mounted) setState(() => _startingId = null);
