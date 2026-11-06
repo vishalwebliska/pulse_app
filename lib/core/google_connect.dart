@@ -38,10 +38,27 @@ class GoogleConnect {
   static Future<bool> connect(BuildContext context) async {
     String? url;
     try {
-      final res = await ApiClient.instance.dio.post(
-        '/auth/mobile/google/connect',
-        data: {'app_return': _appReturn},
-      );
+      final dio = ApiClient.instance.dio;
+      Response<dynamic> res;
+      try {
+        res = await dio.post(
+          '/auth/mobile/google/connect',
+          data: {'app_return': _appReturn},
+        );
+      } on DioException catch (e) {
+        // Some deployments expose this route as GET (an older deploy, or a
+        // stale route cache). Retry as GET with app_return as a query param so
+        // the connect flow works regardless of the method the server has —
+        // the controller reads it via request()->input() either way.
+        if (e.response?.statusCode == 405) {
+          res = await dio.get(
+            '/auth/mobile/google/connect',
+            queryParameters: {'app_return': _appReturn},
+          );
+        } else {
+          rethrow;
+        }
+      }
       url = ((res.data['data'] as Map?)?.cast<String, dynamic>() ??
           const {})['redirect_url'] as String?;
     } on DioException catch (e) {
