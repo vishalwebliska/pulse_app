@@ -13,11 +13,12 @@ on:
 
 jobs:
   build-macos:
-    # This account can't schedule the arm64 macos-14 image even on a public repo
-    # ("macos-14-arm64-us-default is not supported" -> instant cancel), so use
-    # the Intel macos-13. Note GitHub's free Intel macOS capacity can queue a
-    # long time; Codemagic (codemagic.yaml) is the reliable free alternative.
-    runs-on: macos-13
+    # Apple-Silicon macOS runner. This label built the app successfully many
+    # times (CI runs #20-#26); the later switch to Intel `macos-13` was a
+    # misdiagnosis of a few superseded/cancelled runs — macos-13's free Intel
+    # capacity queues indefinitely for this repo, while macos-14 picks up a
+    # runner in seconds. Codemagic (codemagic.yaml) stays as a backup Mac path.
+    runs-on: macos-14
     permissions:
       contents: write
     steps:
@@ -33,6 +34,29 @@ jobs:
       - run: flutter config --no-enable-swift-package-manager
       - run: flutter config --enable-macos-desktop
       - run: flutter pub get
+
+      # Firebase is only used on Android/iOS/web (push is guarded off on desktop
+      # — PushService._supported is false on macOS, where in-app Reverb covers
+      # alerts, and there is no macOS Firebase config). Drop the `macos:` platform
+      # from the cached firebase plugin pubspecs and re-resolve, so flutter
+      # excludes the native Firebase pods from the macOS build. The Dart imports
+      # still resolve; only the native plugin is skipped. Mirrors the Windows
+      # build's exclusion step.
+      - name: Exclude Firebase from the macOS build
+        run: |
+          ROOT="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev"
+          for d in "$ROOT"/firebase_*/; do
+            pp="$d/pubspec.yaml"
+            [ -f "$pp" ] || continue
+            awk '
+              { if ($0 ~ /^      macos:[ \t]*$/) { skip=1; next }
+                if (skip==1) { if ($0 ~ /^        [^ ]/) { next } else { skip=0 } }
+                print }
+            ' "$pp" > "$pp.tmp" && mv "$pp.tmp" "$pp"
+            echo "patched $pp"
+          done
+          flutter pub get
+
       - run: flutter build macos --release
 
       # Zip the .app bundle (-y keeps the internal symlinks a .app needs).
