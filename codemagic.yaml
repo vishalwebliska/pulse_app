@@ -25,6 +25,25 @@ workflows:
         script: flutter config --enable-macos-desktop
       - name: Get packages
         script: flutter pub get
+      # Firebase is Android/iOS/web only here (push is guarded off on desktop —
+      # PushService._supported is false on macOS, and there is no macOS Firebase
+      # config), so strip the `macos:` platform from the cached firebase plugin
+      # pubspecs and re-resolve. The native Firebase pods are then skipped while
+      # the Dart imports still resolve — keeps the macOS pod/link step clean.
+      - name: Exclude Firebase from the macOS build
+        script: |
+          ROOT="${PUB_CACHE:-$HOME/.pub-cache}/hosted/pub.dev"
+          for d in "$ROOT"/firebase_*/; do
+            pp="$d/pubspec.yaml"
+            [ -f "$pp" ] || continue
+            awk '
+              { if ($0 ~ /^      macos:[ \t]*$/) { skip=1; next }
+                if (skip==1) { if ($0 ~ /^        [^ ]/) { next } else { skip=0 } }
+                print }
+            ' "$pp" > "$pp.tmp" && mv "$pp.tmp" "$pp"
+            echo "patched $pp"
+          done
+          flutter pub get
       - name: Build macOS (release, unsigned)
         script: flutter build macos --release
       - name: Package the .app

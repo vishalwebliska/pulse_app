@@ -1,24 +1,26 @@
 name: macOS build
 
-# Builds the Pulse macOS .app on a GitHub-hosted Mac runner and publishes it as
-# a public Release asset (downloadable without login, since the repo is public).
-#
-# On-demand only: trigger with "Run workflow" on the Actions tab, or by pushing a
-# version tag (e.g. git tag v1.0.0 && git push origin v1.0.0).
+# NOTE: GitHub-hosted macOS runners do not work for this account/repo:
+#   - macos-13 (Intel) sits in "Queued" forever — no free Intel capacity is
+#     ever allocated (CI runs #31/#33/#34/#35 all stuck);
+#   - macos-14 resolves to "macos-14-arm64-us-default", which errors
+#     "not supported" and is cancelled in ~2s (CI run #36).
+# (macos-14 did build months ago in runs #20-#26, before GitHub changed its
+# free Apple-Silicon allocation.) So the Mac app is built on Codemagic instead
+# — see codemagic.yaml, free mac_mini_m2. This workflow is kept for manual
+# retries only (no tag trigger, so release tags don't spawn dead macOS runs);
+# re-add the tag trigger if GitHub ever restores a usable runner here.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
 
 jobs:
   build-macos:
-    # Apple-Silicon macOS runner. This label built the app successfully many
-    # times (CI runs #20-#26); the later switch to Intel `macos-13` was a
-    # misdiagnosis of a few superseded/cancelled runs — macos-13's free Intel
-    # capacity queues indefinitely for this repo, while macos-14 picks up a
-    # runner in seconds. Codemagic (codemagic.yaml) stays as a backup Mac path.
-    runs-on: macos-14
+    # macos-13 (Intel) is the only label this account might ever schedule —
+    # macos-14 is arm64 and errors "not supported" here. Even macos-13 currently
+    # just queues, so this is effectively a placeholder; Codemagic is the real
+    # path (codemagic.yaml). Left at macos-13 so a future free-Intel restore
+    # would Just Work on a manual dispatch.
+    runs-on: macos-13
     permissions:
       contents: write
     steps:
